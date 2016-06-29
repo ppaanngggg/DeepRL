@@ -38,13 +38,19 @@ class Model(ChainList):
     def __init__(self, _shared, _head):
         self.is_train = True
         self.shared = _shared()
-        self.head_list = [_head() for _ in range(Config.K)]
-
-        super(Model, self).__init__(*(self.head_list + [self.shared]))
+        if Config.bootstrap:
+            self.head_list = [_head() for _ in range(Config.K)]
+            super(Model, self).__init__(*(self.head_list + [self.shared]))
+        else:
+            self.head = _head()
+            super(Model, self).__init__(self.head, self.shared)
 
     def __call__(self, _x):
         y_shared = self.shared(_x, self.is_train)
-        y = [head(y_shared, self.is_train) for head in self.head_list]
+        if Config.bootstrap:
+            y = [head(y_shared, self.is_train) for head in self.head_list]
+        else:
+            y = self.head(y_shared, self.is_train)
         return y
 
     def training(self):

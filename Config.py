@@ -1,3 +1,11 @@
+# rl type
+q_learning = 'q_learning'
+actor_critic = 'actor_critic'
+
+double_q = True
+prioritized_replay = True
+bootstrap = True
+
 # bootstrap
 K = 10  # head number
 p = 0.5  # for mask

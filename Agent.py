@@ -27,8 +27,9 @@ class Agent(object):
         if not self.env.in_game:
             logging.info('Env not in game')
             self.env.startNewGame()
-            self.use_head = random.randint(0, Config.K - 1)
-            logging.info('Use head: ' + str(self.use_head))
+            if Config.bootstrap:
+                self.use_head = random.randint(0, Config.K - 1)
+                logging.info('Use head: ' + str(self.use_head))
 
         # get current state
         cur_state = self.env.getState()
@@ -43,13 +44,50 @@ class Agent(object):
 
         # randomly decide to store tuple into pool
         if random.random() < Config.replay_p:
+            mask = None
+            if Config.bootstrap:
+                mask = np.random.binomial(1, Config.p, (Config.K)).tolist()
             # store replay_tuple into memory pool
             replay_tuple = ReplayTuple(
                 cur_state, action, reward, next_state,
                 # get mask for bootstrap
-                np.random.binomial(1, Config.p, (Config.K)).tolist()
+                mask
             )
             self.replay.push(replay_tuple)
+
+    def getInputs(self, _batch_tuples):
+        # stack inputs
+        cur_x = [self.env.getX(t.state) for t in _batch_tuples]
+        next_x = [self.env.getX(t.next_state) for t in _batch_tuples]
+        # merge inputs into one array
+        if Config.gpu:
+            cur_x = cupy.concatenate(cur_x, 0)
+            next_x = cupy.concatenate(next_x, 0)
+        else:
+            cur_x = np.concatenate(cur_x, 0)
+            next_x = np.concatenate(next_x, 0)
+        return cur_x, next_x
+
+    def forward(self, _cur_x, _next_x, _state_list):
+        # get cur outputs
+        cur_output = self.QFunc(self.q_func, _cur_x)
+        # get next outputs, NOT target
+        next_output = self.QFunc(self.q_func, _next_x)
+        if Config.bootstrap:
+            # choose next action for each output
+            next_action = [
+                self.env.getBestAction(
+                    o.data,
+                    _state_list
+                ) for o in next_output  # for each head in Model
+            ]
+        else:
+            # only one head
+            next_action = self.env.getBestAction(
+                next_output, _state_list)
+        # get next outputs, target
+        next_output = self.QFunc(self.target_q_func, _next_x)
+        return cur_output, next_output, next_action
 
     def train(self):
         # clear grads
@@ -60,40 +98,17 @@ class Agent(object):
         if not len(batch_tuples):
             return
 
-        # stack inputs
-        cur_x = [self.env.getX(t.state) for t in batch_tuples]
-        next_x = [self.env.getX(t.next_state) for t in batch_tuples]
-        # merge inputs into one array
-        if Config.gpu:
-            # cur_x = [cupy.expand_dims(t, 0) for t in cur_x]
-            cur_x = cupy.concatenate(cur_x, 0)
-            # next_x = [cupy.expand_dims(t, 0) for t in next_x]
-            next_x = cupy.concatenate(next_x, 0)
-        else:
-            # cur_x = np.stack(cur_x)
-            # next_x = np.stack(next_x)
-            cur_x = np.concatenate(cur_x, 0)
-            next_x = np.concatenate(next_x, 0)
+        cur_x, next_x = self.getInputs(batch_tuples)
 
-        # get cur outputs
-        cur_output = self.QFunc(self.q_func, cur_x)
-        # get next outputs, NOT target
-        next_output = self.QFunc(self.q_func, next_x)
-        # choose next action for each output
-        next_action = [
-            self.env.getBestAction(
-                o.data,
-                [t.next_state for t in batch_tuples]
-            ) for o in next_output  # for each head in Model
-        ]
-        # get next outputs, target
-        next_output = self.QFunc(self.target_q_func, next_x)
+        cur_output, next_output, next_action = self.forward(
+            cur_x, next_x, [t.next_state for t in batch_tuples])
 
         # clear err of tuples
         for t in batch_tuples:
             t.err = 0.
-        # store err count
-        err_count_list = [0.] * len(batch_tuples)
+        if Config.bootstrap:
+            # store err count, because of bootstrap
+            err_count_list = [0.] * len(batch_tuples)
 
         # compute grad's weights
         weights = np.array([t.P for t in batch_tuples], np.float32)
@@ -107,7 +122,6 @@ class Agent(object):
             weights = cupy.expand_dims(weights, 1)
         else:
             weights = np.expand_dims(weights, 1)
-
         # update beta
         Config.beta = min(1, Config.beta + Config.beta_add)
 

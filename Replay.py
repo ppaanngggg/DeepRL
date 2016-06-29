@@ -1,9 +1,10 @@
 import numpy as np
 import Config
 
+
 class ReplayTuple:
 
-    def __init__(self, _state, _action, _reward, _next_state, _mask):
+    def __init__(self, _state, _action, _reward, _next_state, _mask=None):
         self.state = _state
         self.action = _action
         self.reward = _reward
