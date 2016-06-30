@@ -14,16 +14,14 @@ epsilon = 1.
 epsilon_decay = 0.99
 epsilon_underline = 0.1
 
-if bootstrap:
-    # bootstrap
-    K = 10  # head number
-    p = 0.5  # for mask
+# bootstrap
+K = 10  # head number
+p = 0.5  # for mask
 
-if prioritized_replay:
-    # prioritized experience replay
-    alpha = 0.7
-    beta = 0.5
-    beta_add = 0.0001
+# prioritized experience replay
+alpha = 0.7
+beta = 0.5
+beta_add = 0.0001
 
 # grad clip, 0 won't clip
 grad_clip = 1
