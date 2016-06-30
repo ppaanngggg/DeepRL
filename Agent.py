@@ -20,7 +20,7 @@ class Agent(object):
         # model for train, model for target
         self.q_func, self.target_q_func = buildModel(
             _shared, _head, _pre_model=None)
-        self.optimizer = optimizers.Adam()
+        self.optimizer = optimizers.RMSprop()
         self.optimizer.setup(self.q_func)
 
     def step(self):
@@ -40,7 +40,7 @@ class Agent(object):
         # get new state
         next_state = self.env.getState()
 
-        logging.info('Action: ' + str(action) + '; Reward: ' + str(reward))
+        logging.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
 
         # randomly decide to store tuple into pool
         if random.random() < Config.replay_p:
