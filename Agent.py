@@ -89,8 +89,12 @@ class Agent(object):
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
         cur_output = self.QFunc(self.q_func, _cur_x)
-        # get next outputs, NOT target
-        next_output = self.QFunc(self.q_func, _next_x)
+        if Config.double_q:
+            # get next outputs, NOT target
+            next_output = self.QFunc(self.q_func, _next_x)
+        else:
+            next_output = self.QFunc(self.target_q_func, _next_x)
+
         if Config.bootstrap:
             # choose next action for each output
             next_action = [
@@ -103,8 +107,10 @@ class Agent(object):
             # only one head
             next_action = self.env.getBestAction(
                 next_output.data, _state_list)
-        # get next outputs, target
-        next_output = self.QFunc(self.target_q_func, _next_x)
+
+        if Config.double_q:
+            # get next outputs, target
+            next_output = self.QFunc(self.target_q_func, _next_x)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action,
@@ -132,11 +138,13 @@ class Agent(object):
                 target_value += Config.gamma * next_action_value
             loss = cur_action_value - target_value
             _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
-            # count err
-            if cur_action_value:
-                _batch_tuples[i].err += abs(loss / cur_action_value)
-                if _err_count:
-                    _err_count[i] += 1
+
+            if Config.prioritized_replay:
+                # count err
+                if cur_action_value:
+                    _batch_tuples[i].err += abs(loss / cur_action_value)
+                    if _err_count:
+                        _err_count[i] += 1
 
     def gradWeight(self, _cur_output, _weights):
         # multiply weights with grad
@@ -171,23 +179,27 @@ class Agent(object):
         cur_output, next_output, next_action = self.forward(
             cur_x, next_x, [t.next_state for t in batch_tuples])
 
-        # clear err of tuples
-        for t in batch_tuples:
-            t.err = 0.
-
         if Config.prioritized_replay:
-            weights = self.getWeights(batch_tuples)
+            # clear err of tuples
+            for t in batch_tuples:
+                t.err = 0.
+            # if prioritized_replay, then we need bias weights
+                weights = self.getWeights(batch_tuples)
 
         if Config.bootstrap:
-            # store err count
-            err_count = [0.] * len(batch_tuples)
+            if Config.prioritized_replay:
+                # store err count
+                err_count = [0.] * len(batch_tuples)
+            else:
+                err_count = None
             # compute grad for each head
             for k in range(Config.K):
                 self.grad(cur_output[k], next_output[k], next_action[k],
                           batch_tuples, err_count, k)
                 if Config.prioritized_replay:
                     self.gradWeight(cur_output[k], weights)
-                self.gradClip(cur_output[k])
+                if Config.grad_clip:
+                    self.gradClip(cur_output[k], Config.grad_clip)
                 # backward
                 cur_output[k].backward()
 
@@ -195,22 +207,28 @@ class Agent(object):
             for param in self.q_func.shared.params():
                 param.grad /= Config.K
 
-            # avg err
-            for i in range(len(batch_tuples)):
-                if err_count[i] > 0:
-                    batch_tuples[i].err /= err_count[i]
+            if Config.prioritized_replay:
+                # avg err
+                for i in range(len(batch_tuples)):
+                    if err_count[i] > 0:
+                        batch_tuples[i].err /= err_count[i]
         else:
             self.grad(cur_output, next_output, next_action,
                       batch_tuples)
             if Config.prioritized_replay:
                 self.gradWeight(cur_output, weights)
-            self.gradClip(cur_output)
+            if Config.grad_clip:
+                self.gradClip(cur_output, Config.grad_clip)
+            # backward
             cur_output.backward()
 
         # update params
         self.optimizer.update()
 
-        self.replay.merge(Config.alpha)
+        if Config.prioritized_replay:
+            self.replay.merge(Config.alpha)
+        else:
+            self.replay.merge()
 
     def chooseAction(self, _model, _state):
         # update epsilon

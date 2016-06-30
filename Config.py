@@ -1,38 +1,44 @@
+# gpu
+gpu = False
+
 # rl type
 q_learning = 'q_learning'
 actor_critic = 'actor_critic'
 
-double_q = True
-prioritized_replay = True
+double_q = False
+prioritized_replay = False
 bootstrap = False
-
-# bootstrap
-K = 10  # head number
-p = 0.5  # for mask
 
 # randomly choose actions
 epsilon = 1.
 epsilon_decay = 0.99
 epsilon_underline = 0.1
 
-# prioritized experience replay
-alpha = 0.7
-beta = 0.5
-beta_add = 0.0001
+if bootstrap:
+    # bootstrap
+    K = 10  # head number
+    p = 0.5  # for mask
+
+if prioritized_replay:
+    # prioritized experience replay
+    alpha = 0.7
+    beta = 0.5
+    beta_add = 0.0001
+
+# grad clip, 0 won't clip
+grad_clip = 1
 
 # reward decay
 gamma = 0.9
-
-# gpu
-gpu = False
 
 # config for replay
 replay_N = 10000  # size of replay
 replay_p = 1.0  # p for add into replay
 
-# train
+# train batch, fetch how many tuple from replay_tuple
 batch_size = 32
 
+# for trainer to count step
 step_total = 1e8  # when to exit
 step_train = 1  # when to train
 setp_update_target = 10000  # when to update target
