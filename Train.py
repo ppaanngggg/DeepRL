@@ -6,6 +6,7 @@ class Train(object):
 
     def __init__(self, _agent):
         self.agent = _agent
+        self.agent.training()
         self.step_count = 0
 
     def run(self):

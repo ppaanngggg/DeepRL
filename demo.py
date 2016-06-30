@@ -3,10 +3,12 @@ from Env import Env
 import Config
 from Replay import *
 from Train import Train
+from Test import Test
 import logging
 import random
 import numpy as np
 import chainer.links as L
+from chainer import optimizers
 
 FORMAT = '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG)
@@ -76,6 +78,11 @@ class Head(Chain):
         y = self.linear(_x)
         return y
 
-agent = Agent(Shared, Head, DemoEnv(), Replay())
-train = Train(agent)
-train.run()
+# agent = Agent(Shared, Head, DemoEnv(),
+#               _optimizer=optimizers.RMSprop(), _replay=Replay())
+# train = Train(agent)
+# train.run()
+
+agent = Agent(Shared, Head, DemoEnv(), _pre_model='./models/step_10000')
+test = Test(agent)
+test.run()
