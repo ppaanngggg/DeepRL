@@ -68,6 +68,24 @@ class Agent(object):
             next_x = np.concatenate(next_x, 0)
         return cur_x, next_x
 
+    def getWeights(self, _batch_tuples):
+        # compute grad's weights
+        weights = np.array([t.P for t in _batch_tuples], np.float32)
+        if Config.gpu:
+            weights = cuda.to_gpu(weights)
+        if self.replay.getPoolSize():
+            weights *= self.replay.getPoolSize()
+        weights = weights ** -Config.beta
+        weights /= weights.max()
+        if Config.gpu:
+            weights = cupy.expand_dims(weights, 1)
+        else:
+            weights = np.expand_dims(weights, 1)
+        # update beta
+        Config.beta = min(1, Config.beta + Config.beta_add)
+
+        return weights
+
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
         cur_output = self.QFunc(self.q_func, _cur_x)
@@ -84,10 +102,59 @@ class Agent(object):
         else:
             # only one head
             next_action = self.env.getBestAction(
-                next_output, _state_list)
+                next_output.data, _state_list)
         # get next outputs, target
         next_output = self.QFunc(self.target_q_func, _next_x)
         return cur_output, next_output, next_action
+
+    def grad(self, _cur_output, _next_output, _next_action,
+             _batch_tuples, _err_count=None, _k=None):
+        # alloc
+        if Config.gpu:
+            _cur_output.grad = cupy.zeros_like(_cur_output.data)
+        else:
+            _cur_output.grad = np.zeros_like(_cur_output.data)
+
+        # compute grad from each tuples
+        for i in range(len(_batch_tuples)):
+            # if use bootstrap and masked
+            if Config.bootstrap and not _batch_tuples[i].mask[_k]:
+                continue
+
+            cur_action_value = \
+                _cur_output.data[i][_batch_tuples[i].action].tolist()
+            reward = _batch_tuples[i].reward
+            target_value = reward
+            # if not empty position, not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                next_action_value = \
+                    _next_output.data[i][_next_action[i]].tolist()
+                target_value += Config.gamma * next_action_value
+            loss = cur_action_value - target_value
+            _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
+            # count err
+            if cur_action_value:
+                _batch_tuples[i].err += abs(loss / cur_action_value)
+                if _err_count:
+                    _err_count[i] += 1
+
+    def gradWeight(self, _cur_output, _weights):
+        # multiply weights with grad
+        if Config.gpu:
+            _cur_output.grad = cupy.multiply(
+                _cur_output.grad, _weights)
+        else:
+            _cur_output.grad = np.multiply(
+                _cur_output.grad, _weights)
+
+    def gradClip(self, _cur_output, _value=1):
+        # clip grads
+        if Config.gpu:
+            _cur_output.grad = cupy.clip(
+                _cur_output.grad, -_value, _value)
+        else:
+            _cur_output.grad = np.clip(
+                _cur_output.grad, -_value, _value)
 
     def train(self):
         # clear grads
@@ -100,83 +167,50 @@ class Agent(object):
 
         cur_x, next_x = self.getInputs(batch_tuples)
 
+        # if bootstrap, they are all list for heads
         cur_output, next_output, next_action = self.forward(
             cur_x, next_x, [t.next_state for t in batch_tuples])
 
         # clear err of tuples
         for t in batch_tuples:
             t.err = 0.
+
+        if Config.prioritized_replay:
+            weights = self.getWeights(batch_tuples)
+
         if Config.bootstrap:
-            # store err count, because of bootstrap
-            err_count_list = [0.] * len(batch_tuples)
+            # store err count
+            err_count = [0.] * len(batch_tuples)
+            # compute grad for each head
+            for k in range(Config.K):
+                self.grad(cur_output[k], next_output[k], next_action[k],
+                          batch_tuples, err_count, k)
+                if Config.prioritized_replay:
+                    self.gradWeight(cur_output[k], weights)
+                self.gradClip(cur_output[k])
+                # backward
+                cur_output[k].backward()
 
-        # compute grad's weights
-        weights = np.array([t.P for t in batch_tuples], np.float32)
-        if Config.gpu:
-            weights = cuda.to_gpu(weights)
-        if self.replay.getPoolSize():
-            weights *= self.replay.getPoolSize()
-        weights = weights ** -Config.beta
-        weights /= weights.max()
-        if Config.gpu:
-            weights = cupy.expand_dims(weights, 1)
-        else:
-            weights = np.expand_dims(weights, 1)
-        # update beta
-        Config.beta = min(1, Config.beta + Config.beta_add)
+            # adjust grads of shared
+            for param in self.q_func.shared.params():
+                param.grad /= Config.K
 
-        # compute grad for each head
-        for k in range(Config.K):
-            if Config.gpu:
-                cur_output[k].grad = cupy.zeros_like(cur_output[k].data)
-            else:
-                cur_output[k].grad = np.zeros_like(cur_output[k].data)
-            # compute grad from each tuples
+            # avg err
             for i in range(len(batch_tuples)):
-                if batch_tuples[i].mask[k]:
-                    cur_action_value = \
-                        cur_output[k].data[i][batch_tuples[i].action].tolist()
-                    reward = batch_tuples[i].reward
-                    next_action_value = \
-                        next_output[k].data[i][next_action[k][i]].tolist()
-                    target_value = reward
-                    # if not empty position, not terminal state
-                    if batch_tuples[i].next_state.in_game:
-                        target_value += Config.gamma * next_action_value
-                    loss = cur_action_value - target_value
-                    cur_output[k].grad[i][batch_tuples[i].action] = 2 * loss
-                    # count err
-                    if cur_action_value:
-                        batch_tuples[i].err += abs(loss / cur_action_value)
-                        err_count_list[i] += 1
-
-            # multiply weights with grad and clip
-            if Config.gpu:
-                cur_output[k].grad = cupy.multiply(
-                    cur_output[k].grad, weights)
-                cur_output[k].grad = cupy.clip(cur_output[k].grad, -1, 1)
-            else:
-                cur_output[k].grad = np.multiply(
-                    cur_output[k].grad, weights)
-                cur_output[k].grad = np.clip(cur_output[k].grad, -1, 1)
-            # backward
-            cur_output[k].backward()
-
-        # adjust grads of shared
-        for param in self.q_func.shared.params():
-            param.grad /= Config.K
+                if err_count[i] > 0:
+                    batch_tuples[i].err /= err_count[i]
+        else:
+            self.grad(cur_output, next_output, next_action,
+                      batch_tuples)
+            if Config.prioritized_replay:
+                self.gradWeight(cur_output, weights)
+            self.gradClip(cur_output)
+            cur_output.backward()
 
         # update params
         self.optimizer.update()
 
-        # avg err
-        for i in range(len(batch_tuples)):
-            if err_count_list[i] > 0:
-                batch_tuples[i].err /= err_count_list[i]
-
         self.replay.merge(Config.alpha)
-
-        return np.mean([t.err for t in batch_tuples])
 
     def chooseAction(self, _model, _state):
         # update epsilon
@@ -192,7 +226,9 @@ class Agent(object):
             # use model to choose
             x_data = self.env.getX(_state)
             output = self.QFunc(_model, x_data)
-            return self.env.getBestAction(output[self.use_head].data, [_state])[0]
+            if Config.bootstrap:
+                output = output[self.use_head]
+            return self.env.getBestAction(output.data, [_state])[0]
 
     def QFunc(self, _model, _x_data):
         def toVariable(_data):
