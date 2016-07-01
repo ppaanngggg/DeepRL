@@ -7,7 +7,7 @@ actor_critic = 'actor_critic'
 
 double_q = False
 prioritized_replay = False
-bootstrap = False
+bootstrap = True
 
 # randomly choose actions
 epsilon = 1.
@@ -40,4 +40,4 @@ batch_size = 32
 step_total = 1e8  # when to exit
 step_train = 1  # when to train
 setp_update_target = 10000  # when to update target
-step_save = 100000  # when to save model
+step_save = 10000  # when to save model

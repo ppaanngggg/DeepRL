@@ -13,15 +13,25 @@ import logging
 
 class Agent(object):
 
-    def __init__(self, _shared, _head, _env, _replay=None, _pre_model=None):
+    def __init__(self, _shared, _head, _env,
+                 _optimizer=None, _replay=None, _pre_model=None):
         self.env = _env
         self.replay = _replay
 
+        self.is_train = True
+
         # model for train, model for target
         self.q_func, self.target_q_func = buildModel(
-            _shared, _head, _pre_model=None)
-        self.optimizer = optimizers.RMSprop()
-        self.optimizer.setup(self.q_func)
+            _shared, _head, _pre_model=_pre_model)
+        self.optimizer = _optimizer
+        if self.optimizer:
+            self.optimizer.setup(self.q_func)
+
+    def training(self):
+        self.is_train = True
+
+    def testing(self):
+        self.is_train = False
 
     def step(self):
         while not self.env.in_game:
@@ -37,23 +47,24 @@ class Agent(object):
         action = self.chooseAction(self.q_func, cur_state)
         # do action and get reward
         reward = self.env.doAction(action)
-        # get new state
-        next_state = self.env.getState()
 
         logging.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
 
-        # randomly decide to store tuple into pool
-        if random.random() < Config.replay_p:
-            mask = None
-            if Config.bootstrap:
-                mask = np.random.binomial(1, Config.p, (Config.K)).tolist()
-            # store replay_tuple into memory pool
-            replay_tuple = ReplayTuple(
-                cur_state, action, reward, next_state,
-                # get mask for bootstrap
-                mask
-            )
-            self.replay.push(replay_tuple)
+        if self.is_train:
+            # get new state
+            next_state = self.env.getState()
+            # randomly decide to store tuple into pool
+            if random.random() < Config.replay_p:
+                mask = None
+                if Config.bootstrap:
+                    mask = np.random.binomial(1, Config.p, (Config.K)).tolist()
+                # store replay_tuple into memory pool
+                replay_tuple = ReplayTuple(
+                    cur_state, action, reward, next_state,
+                    # get mask for bootstrap
+                    mask
+                )
+                self.replay.push(replay_tuple)
 
     def getInputs(self, _batch_tuples):
         # stack inputs
@@ -231,22 +242,43 @@ class Agent(object):
             self.replay.merge()
 
     def chooseAction(self, _model, _state):
-        # update epsilon
-        Config.epsilon = max(
-            Config.epsilon_underline,
-            Config.epsilon * Config.epsilon_decay
-        )
-        random_value = random.random()
-        if random_value < Config.epsilon:
-            # randomly choose
-            return self.env.getRandomAction(_state)
+        if self.is_train:
+            # update epsilon
+            Config.epsilon = max(
+                Config.epsilon_underline,
+                Config.epsilon * Config.epsilon_decay
+            )
+            random_value = random.random()
+            if random_value < Config.epsilon:
+                # randomly choose
+                return self.env.getRandomAction(_state)
+            else:
+                # use model to choose
+                x_data = self.env.getX(_state)
+                output = self.QFunc(_model, x_data)
+                if Config.bootstrap:
+                    output = output[self.use_head]
+                return self.env.getBestAction(output.data, [_state])[0]
         else:
-            # use model to choose
             x_data = self.env.getX(_state)
             output = self.QFunc(_model, x_data)
             if Config.bootstrap:
-                output = output[self.use_head]
-            return self.env.getBestAction(output.data, [_state])[0]
+                action_dict = {}
+                for o in output:
+                    action = self.env.getBestAction(o.data, [_state])[0]
+                    if action not in action_dict.keys():
+                        action_dict[action] = 1
+                    else:
+                        action_dict[action] += 1
+                max_k = -1
+                max_v = 0
+                for k, v in zip(action_dict.keys(), action_dict.values()):
+                    if v > max_v:
+                        max_k = k
+                        max_v = v
+                return max_k
+            else:
+                return self.env.getBestAction(output.data, [_state])[0]
 
     def QFunc(self, _model, _x_data):
         def toVariable(_data):
