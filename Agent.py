@@ -99,12 +99,12 @@ class Agent(object):
 
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
-        cur_output = self.QFunc(self.q_func, _cur_x)
+        cur_output = self.QFunc(self.q_func, _cur_x, True)
         if Config.double_q:
             # get next outputs, NOT target
-            next_output = self.QFunc(self.q_func, _next_x)
+            next_output = self.QFunc(self.q_func, _next_x, False)
         else:
-            next_output = self.QFunc(self.target_q_func, _next_x)
+            next_output = self.QFunc(self.target_q_func, _next_x, False)
 
         if Config.bootstrap:
             # choose next action for each output
@@ -121,7 +121,7 @@ class Agent(object):
 
         if Config.double_q:
             # get next outputs, target
-            next_output = self.QFunc(self.target_q_func, _next_x)
+            next_output = self.QFunc(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action,
@@ -255,13 +255,13 @@ class Agent(object):
             else:
                 # use model to choose
                 x_data = self.env.getX(_state)
-                output = self.QFunc(_model, x_data)
+                output = self.QFunc(_model, x_data, False)
                 if Config.bootstrap:
                     output = output[self.use_head]
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)
-            output = self.QFunc(_model, x_data)
+            output = self.QFunc(_model, x_data, False)
             if Config.bootstrap:
                 action_dict = {}
                 for o in output:
@@ -280,12 +280,16 @@ class Agent(object):
             else:
                 return self.env.getBestAction(output.data, [_state])[0]
 
-    def QFunc(self, _model, _x_data):
+    def QFunc(self, _model, _x_data, _train=True):
         def toVariable(_data):
             if type(_data) is list:
                 return [toVariable(d) for d in _data]
             else:
                 return Variable(_data)
+        if _train:
+            _model.training()
+        else:
+            _model.evaluating()
         return _model(toVariable(_x_data))
 
     def updateTargetQFunc(self):
