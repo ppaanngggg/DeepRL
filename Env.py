@@ -33,8 +33,8 @@ class Env(object):
 
     def startNewGame(self):
         self.in_game = True
-        self.doStartNewGame()
         logging.info('Start new game')
+        self.doStartNewGame()
 
     def getState(self):
         return State(self.in_game, self.doGetState())

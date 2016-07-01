@@ -24,7 +24,7 @@ class Agent(object):
         self.optimizer.setup(self.q_func)
 
     def step(self):
-        if not self.env.in_game:
+        while not self.env.in_game:
             logging.info('Env not in game')
             self.env.startNewGame()
             if Config.bootstrap:
