@@ -64,5 +64,6 @@ def buildModel(_shared, _head, _pre_model=None):
     q_func = Model(_shared, _head)
     if _pre_model:
         S.load_npz(_pre_model, q_func)
-    target_q_func = q_func.copy()
+    target_q_func = Model(_shared, _head)
+    target_q_func.copyparams(q_func)
     return q_func, target_q_func
