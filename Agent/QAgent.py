@@ -103,7 +103,7 @@ class QAgent(Agent):
                 target_value += self.gamma * next_action_value
             loss = cur_action_value - target_value
             _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
-            err_list.append(abs(loss / target_value))
+            err_list.append(abs(loss))
         return err_list
 
     def train(self):
