@@ -56,7 +56,28 @@ class PrioritizedReplay():
                 replace=False,
                 p=[t.P for t in self.memory_pool]
             )
-        return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool
+        batch_tuples = [self.memory_pool[choice]
+                        for choice in choices] + self.tmp_memory_pool
+        return batch_tuples, self.getWeights(batch_tuples)
+
+    def getWeights(self, _batch_tuples):
+        if not len(_batch_tuples):
+            return None
+        # compute grad's weights
+        weights = np.array([t.P for t in _batch_tuples], np.float32)
+        if self.getPoolSize():
+            weights *= self.getPoolSize()
+        weights = weights ** -self.beta
+        weights /= weights.max()
+        weights = np.expand_dims(weights, 1)
+        # update beta
+        self.beta = min(1, self.beta + self.beta_add)
+
+        return weights
+
+    def setErr(self, _batch_tuples, _err_list):
+        for t, e in zip(_batch_tuples, _err_list):
+            t.err = e
 
     def merge(self):
         self.memory_pool += self.tmp_memory_pool
@@ -65,6 +86,7 @@ class PrioritizedReplay():
         # sort memory pool by err
         self.memory_pool = sorted(
             self.memory_pool, key=lambda x: x.err, reverse=True)
+        # pop last
         if len(self.memory_pool) > self.N:
             self.memory_pool = self.memory_pool[:self.N]
         # compute pi = 1 / rank(i), and count sum(pi^alpha)

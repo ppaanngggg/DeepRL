@@ -34,6 +34,24 @@ class Agent(object):
             next_x = np.concatenate(next_x, 0)
         return cur_x, next_x
 
+    def gradWeight(self, _cur_output, _weights):
+        # multiply weights with grad
+        if self.gpu:
+            _cur_output.grad = cupy.multiply(
+                _cur_output.grad, _weights)
+        else:
+            _cur_output.grad = np.multiply(
+                _cur_output.grad, _weights)
+
+    def gradClip(self, _cur_output, _value=1):
+        # clip grads
+        if self.gpu:
+            _cur_output.grad = cupy.clip(
+                _cur_output.grad, -_value, _value)
+        else:
+            _cur_output.grad = np.clip(
+                _cur_output.grad, -_value, _value)
+
     def QFunc(self, _model, _x_data, _train=True):
         def toVariable(_data):
             if type(_data) is list:

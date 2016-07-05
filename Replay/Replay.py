@@ -40,7 +40,7 @@ class Replay():
                     max(_num - len(self.tmp_memory_pool), 0)),
                 replace=False,
             )
-        return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool
+        return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool, None
 
     def merge(self):
         self.memory_pool += self.tmp_memory_pool
