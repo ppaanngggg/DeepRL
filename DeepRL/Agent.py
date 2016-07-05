@@ -9,6 +9,8 @@ if Config.gpu:
 from chainer import cuda
 
 import logging
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 
 class Agent(object):
@@ -33,13 +35,17 @@ class Agent(object):
     def testing(self):
         self.is_train = False
 
-    def step(self):
+    def startNewGame(self):
         while not self.env.in_game:
-            logging.info('Env not in game')
+            logger.info('Env not in game')
             self.env.startNewGame()
             if Config.bootstrap:
                 self.use_head = random.randint(0, Config.K - 1)
-                logging.info('Use head: ' + str(self.use_head))
+                logger.info('Use head: ' + str(self.use_head))
+
+    def step(self):
+        if not self.env.in_game:
+            return False
 
         # get current state
         cur_state = self.env.getState()
@@ -48,7 +54,7 @@ class Agent(object):
         # do action and get reward
         reward = self.env.doAction(action)
 
-        logging.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
+        logger.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
 
         if self.is_train:
             # get new state
@@ -65,6 +71,8 @@ class Agent(object):
                     mask
                 )
                 self.replay.push(replay_tuple)
+
+        return self.env.in_game
 
     def getInputs(self, _batch_tuples):
         # stack inputs
@@ -293,10 +301,10 @@ class Agent(object):
         return _model(toVariable(_x_data))
 
     def updateTargetQFunc(self):
-        logging.info('')
+        logger.info('')
         self.target_q_func.copyparams(self.q_func)
 
     def save(self, _step):
         filename = './models/step_' + str(_step)
-        logging.info(filename)
+        logger.info(filename)
         serializers.save_npz(filename, self.q_func)

@@ -11,23 +11,22 @@ import chainer.links as L
 from chainer import optimizers
 import gym
 
-FORMAT = '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(message)s'
-logging.basicConfig(format=FORMAT, level=logging.DEBUG)
-
 Config.step_save = 1000
+Config.setp_update_target = 1000
 Config.bootstrap = True
 Config.double_q = True
-Config.prioritized_replay = False
+Config.prioritized_replay = True
 Config.gamma = 0.99
-Config.epsilon = 1.
-Config.epsilon_underline = 0.
+Config.epsilon = 0.5
+Config.epsilon_decay = 0.995
+Config.epsilon_underline = 0.01
+
 
 class DemoEnv(Env):
 
     def __init__(self):
         super(DemoEnv, self).__init__()
         self.g = gym.make('CartPole-v0')
-        self.g.render()
         self.epoch = 0
         self.total_reward = 0.
         self.total_reward_list = []
@@ -35,11 +34,10 @@ class DemoEnv(Env):
     def doStartNewGame(self):
         self.epoch += 1
         self.total_reward_list.append(self.total_reward)
-        print self.total_reward_list
+        print len(self.total_reward_list), self.total_reward_list[-1]
         if self.epoch == 300:
             np.save('pri', self.total_reward_list)
             raw_input()
-        print 'doStartNewGame'
         self.total_reward = 0.
         self.o = self.g.reset()
 
@@ -52,7 +50,6 @@ class DemoEnv(Env):
         self.total_reward += reward
         if self.total_reward == 200:
             self.in_game = False
-        print _action, self.total_reward
         self.g.render()
         return reward
 
@@ -89,11 +86,11 @@ class Head(Chain):
         y = self.linear(_x)
         return y
 
-# agent = Agent(Shared, Head, DemoEnv(),
-#               _optimizer=optimizers.RMSprop(), _replay=Replay())
-# train = Train(agent)
-# train.run()
+agent = Agent(Shared, Head, DemoEnv(),
+              _optimizer=optimizers.RMSprop(), _replay=Replay())
+train = Train(agent)
+train.run()
 
-agent = Agent(Shared, Head, DemoEnv(), _pre_model='./models/step_6000')
-test = Test(agent)
-test.run()
+# agent = Agent(Shared, Head, DemoEnv(), _pre_model='./models/step_6000')
+# test = Test(agent)
+# test.run()

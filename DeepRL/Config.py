@@ -37,7 +37,7 @@ replay_p = 1.0  # p for add into replay
 batch_size = 32
 
 # for trainer to count step
-step_total = 1e8  # when to exit
+epoch_total = 1e3 # when to exit
 step_train = 1  # when to train
-setp_update_target = 10000  # when to update target
+step_update_target = 10000  # when to update target
 step_save = 10000  # when to save model
