@@ -65,7 +65,7 @@ class Agent(object):
         return _model(toVariable(_x_data))
 
     def updateTargetQFunc(self):
-        logger.info('')
+        logger.info('update target func')
         self.target_q_func.copyparams(self.q_func)
 
     def save(self, _epoch, _step):
