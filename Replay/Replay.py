@@ -42,6 +42,9 @@ class Replay():
             )
         return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool, None
 
+    def setErr(self, _batch_tuples, _err_list):
+        pass
+
     def merge(self):
         self.memory_pool += self.tmp_memory_pool
         self.tmp_memory_pool = []
