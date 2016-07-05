@@ -90,6 +90,7 @@ class QAgent(Agent):
             _cur_output.grad = np.zeros_like(_cur_output.data)
 
         # compute grad from each tuples
+        err_list = []
         for i in range(len(_batch_tuples)):
             cur_action_value = \
                 _cur_output.data[i][_batch_tuples[i].action].tolist()
@@ -102,31 +103,15 @@ class QAgent(Agent):
                 target_value += self.gamma * next_action_value
             loss = cur_action_value - target_value
             _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
-
-    def gradWeight(self, _cur_output, _weights):
-        # multiply weights with grad
-        if self.gpu:
-            _cur_output.grad = cupy.multiply(
-                _cur_output.grad, _weights)
-        else:
-            _cur_output.grad = np.multiply(
-                _cur_output.grad, _weights)
-
-    def gradClip(self, _cur_output, _value=1):
-        # clip grads
-        if self.gpu:
-            _cur_output.grad = cupy.clip(
-                _cur_output.grad, -_value, _value)
-        else:
-            _cur_output.grad = np.clip(
-                _cur_output.grad, -_value, _value)
+            err_list.append(abs(loss / target_value))
+        return err_list
 
     def train(self):
         # clear grads
         self.q_func.zerograds()
 
         # pull tuples from memory pool
-        batch_tuples = self.replay.pull(self.batch_size)
+        batch_tuples, weights = self.replay.pull(self.batch_size)
         if not len(batch_tuples):
             return
 
@@ -136,7 +121,11 @@ class QAgent(Agent):
         cur_output, next_output, next_action = self.forward(
             cur_x, next_x, [t.next_state for t in batch_tuples])
         # fill grad
-        self.grad(cur_output, next_output, next_action, batch_tuples)
+        err_list = self.grad(cur_output, next_output,
+                             next_action, batch_tuples)
+        self.replay.setErr(batch_tuples, err_list)
+        if weights is not None:
+            self.gradWeight(cur_output, weights)
         if self.grad_clip:
             self.gradClip(cur_output, self.grad_clip)
         # backward
