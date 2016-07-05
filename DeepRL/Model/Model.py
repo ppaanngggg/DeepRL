@@ -1,11 +1,9 @@
-import numpy as np
 import chainer.functions as F
 import chainer.links as L
 from chainer import Variable
 from chainer import optimizers
 from chainer import Chain, ChainList
 import chainer.serializers as S
-import chainer.computational_graph as c
 import Config
 
 
@@ -60,10 +58,8 @@ class Model(ChainList):
         self.is_train = False
 
 
-def buildModel(_shared, _head, _pre_model=None):
+def buildModel(_shared, _head):
     q_func = Model(_shared, _head)
-    if _pre_model:
-        S.load_npz(_pre_model, q_func)
     target_q_func = Model(_shared, _head)
     target_q_func.copyparams(q_func)
     return q_func, target_q_func

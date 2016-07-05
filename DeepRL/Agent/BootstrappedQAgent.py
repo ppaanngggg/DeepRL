@@ -1,47 +1,37 @@
-import Config
-from Model import *
-from Replay import ReplayTuple
-
+from ...Model.QModel import QModel
 import random
 from chainer import serializers, optimizers
-if Config.gpu:
-    import cupy
-from chainer import cuda
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class Agent(object):
+class BootstrappedQAgent(object):
 
-    def __init__(self, _shared, _head, _env,
-                 _optimizer=None, _replay=None, _pre_model=None):
-        self.env = _env
-        self.replay = _replay
+    def __init__(self, _model, _optimizer, _env,  _is_train=True, _replay=None):
+        """
+        Args:
+            _model (class): model to predict
+        """
 
-        self.is_train = True
+        self.is_train = _is_train
 
-        # model for train, model for target
-        self.q_func, self.target_q_func = buildModel(
-            _shared, _head, _pre_model=_pre_model)
+        self.q_func = QModel(_model)
+        self.target_q_func = QModel(_shared, _head)
+        self.target_q_func.copyparams(q_func)
+
         self.optimizer = _optimizer
         if self.optimizer:
             self.optimizer.setup(self.q_func)
 
-    def training(self):
-        self.is_train = True
-
-    def testing(self):
-        self.is_train = False
+        self.env = _env
+        self.replay = _replay
 
     def startNewGame(self):
-        while not self.env.in_game:
-            logger.info('Env not in game')
-            self.env.startNewGame()
-            if Config.bootstrap:
-                self.use_head = random.randint(0, Config.K - 1)
-                logger.info('Use head: ' + str(self.use_head))
+        super(BootstrappedQAgent, self).startNewGame():
+        self.use_head = random.randint(0, Config.K - 1)
+        logger.info('Use head: ' + str(self.use_head))
 
     def step(self):
         if not self.env.in_game:
@@ -74,18 +64,7 @@ class Agent(object):
 
         return self.env.in_game
 
-    def getInputs(self, _batch_tuples):
-        # stack inputs
-        cur_x = [self.env.getX(t.state) for t in _batch_tuples]
-        next_x = [self.env.getX(t.next_state) for t in _batch_tuples]
-        # merge inputs into one array
-        if Config.gpu:
-            cur_x = cupy.concatenate(cur_x, 0)
-            next_x = cupy.concatenate(next_x, 0)
-        else:
-            cur_x = np.concatenate(cur_x, 0)
-            next_x = np.concatenate(next_x, 0)
-        return cur_x, next_x
+
 
     def getWeights(self, _batch_tuples):
         # compute grad's weights
@@ -288,17 +267,7 @@ class Agent(object):
             else:
                 return self.env.getBestAction(output.data, [_state])[0]
 
-    def QFunc(self, _model, _x_data, _train=True):
-        def toVariable(_data):
-            if type(_data) is list:
-                return [toVariable(d) for d in _data]
-            else:
-                return Variable(_data)
-        if _train:
-            _model.training()
-        else:
-            _model.evaluating()
-        return _model(toVariable(_x_data))
+
 
     def updateTargetQFunc(self):
         logger.info('')

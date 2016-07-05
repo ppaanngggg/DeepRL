@@ -1,12 +1,6 @@
 import logging
 import numpy as np
-import Config
-if Config.gpu:
-    import cupy
-
-##########################################
-## simple env in bootstrap DQN for demo ##
-##########################################
+from chainer import cuda
 
 
 class State(object):
@@ -44,7 +38,7 @@ class Env(object):
 
     def getX(self, _state):
         ret = self.doGetX(_state)
-        if type(ret) is not np.ndarray and type(ret) is not cupy.ndarray:
+        if type(ret) is not np.ndarray and type(ret) is not cuda.ndarray:
             raise Exception()
         return ret
 
@@ -65,19 +59,19 @@ class Env(object):
 
     # need to be overwritten by user
     def doStartNewGame(self):
-        pass
+        raise Exception()
 
     def doGetState(self):
-        return
+        raise Exception()
 
     def doDoAction(self, _action):
-        return
+        raise Exception()
 
     def doGetX(self, _state):
-        return
+        raise Exception()
 
     def doGetRandomAction(self, _state):
-        return
+        raise Exception()
 
     def doGetBestAction(self, _data, _state_list):
-        return
+        raise Exception()

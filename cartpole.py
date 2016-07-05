@@ -1,25 +1,15 @@
-from DeepRL.Agent import *
 from DeepRL.Env import Env
-from DeepRL import Config
-from DeepRL.Replay import *
+from DeepRL.Agent import QAgent
+from DeepRL.Replay import Replay
 from DeepRL.Train import Train
-from DeepRL.Test import Test
-import logging
-import random
-import numpy as np
-import chainer.links as L
-from chainer import optimizers
-import gym
 
-Config.step_save = 1000
-Config.setp_update_target = 1000
-Config.bootstrap = True
-Config.double_q = True
-Config.prioritized_replay = True
-Config.gamma = 0.99
-Config.epsilon = 0.5
-Config.epsilon_decay = 0.995
-Config.epsilon_underline = 0.01
+from chainer import Chain, optimizers
+import chainer.links as L
+import chainer.functions as F
+
+import gym
+import numpy as np
+import random
 
 
 class DemoEnv(Env):
@@ -63,34 +53,22 @@ class DemoEnv(Env):
         return np.argmax(_data, 1).tolist()
 
 
-class Shared(Chain):
+class Mlp(Chain):
 
     def __init__(self):
-        super(Shared, self).__init__(
-            linear=L.Linear(4, 20)
+        super(Mlp, self).__init__(
+            l1=L.Linear(4, 20),
+            l2=L.Linear(20, 2)
         )
 
-    def __call__(self, _x, _is_train):
-        y = F.relu(self.linear(_x))
+    def __call__(self, _x):
+        y = self.l1(_x)
+        y = F.relu(y)
+        y = self.l2(y)
         return y
 
-
-class Head(Chain):
-
-    def __init__(self):
-        super(Head, self).__init__(
-            linear=L.Linear(20, 2)
-        )
-
-    def __call__(self, _x, _is_train):
-        y = self.linear(_x)
-        return y
-
-agent = Agent(Shared, Head, DemoEnv(),
-              _optimizer=optimizers.RMSprop(), _replay=Replay())
+agent = QAgent(_model=Mlp, _env=DemoEnv(),
+               _optimizer=optimizers.Adam(),
+               _replay=Replay())
 train = Train(agent)
 train.run()
-
-# agent = Agent(Shared, Head, DemoEnv(), _pre_model='./models/step_6000')
-# test = Test(agent)
-# test.run()
