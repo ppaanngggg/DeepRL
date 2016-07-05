@@ -66,23 +66,7 @@ class BootstrappedQAgent(object):
 
 
 
-    def getWeights(self, _batch_tuples):
-        # compute grad's weights
-        weights = np.array([t.P for t in _batch_tuples], np.float32)
-        if Config.gpu:
-            weights = cuda.to_gpu(weights)
-        if self.replay.getPoolSize():
-            weights *= self.replay.getPoolSize()
-        weights = weights ** -Config.beta
-        weights /= weights.max()
-        if Config.gpu:
-            weights = cupy.expand_dims(weights, 1)
-        else:
-            weights = np.expand_dims(weights, 1)
-        # update beta
-        Config.beta = min(1, Config.beta + Config.beta_add)
 
-        return weights
 
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs

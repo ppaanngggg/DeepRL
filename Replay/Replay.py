@@ -21,7 +21,7 @@ class ReplayTuple:
 class Replay():
 
     def __init__(self, _N=1e4):
-        self.N = _N
+        self.N = int(_N)
         self.memory_pool = []
         self.tmp_memory_pool = []
 
@@ -42,7 +42,7 @@ class Replay():
             )
         return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool
 
-    def merge(self, _alpha=None):
+    def merge(self):
         self.memory_pool += self.tmp_memory_pool
         self.tmp_memory_pool = []
         if len(self.memory_pool) > self.N:
