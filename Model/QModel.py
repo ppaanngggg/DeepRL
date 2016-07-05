@@ -8,7 +8,7 @@ class QModel(Chain):
         super(QModel, self).__init__(model=_model)
 
     def __call__(self, _x):
-        return self.model(_x)
+        return self.model(_x, self.is_train)
 
     def training(self):
         self.is_train = True
