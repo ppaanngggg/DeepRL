@@ -3,11 +3,12 @@ import numpy as np
 
 class ReplayTuple:
 
-    def __init__(self, _state, _action, _reward, _next_state):
+    def __init__(self, _state, _action, _reward, _next_state, _mask=None):
         self.state = _state
         self.action = _action
         self.reward = _reward
         self.next_state = _next_state
+        self.mask = _mask
 
     def show(self):
         print '----- begin -----'
@@ -15,6 +16,8 @@ class ReplayTuple:
         self.next_state.show()
         print 'action:', self.action
         print 'reward:', self.reward
+        if self.mask is not None:
+            print 'mask:', self.mask
         print '----- end -----'
 
 
@@ -25,10 +28,10 @@ class Replay():
         self.memory_pool = []
         self.tmp_memory_pool = []
 
-    def push(self, _state, _action, _reward, _next_state):
+    def push(self, _state, _action, _reward, _next_state, _mask=None):
         # store new tuples into tmp memory buffer
         self.tmp_memory_pool.append(
-            ReplayTuple(_state, _action, _reward, _next_state)
+            ReplayTuple(_state, _action, _reward, _next_state, _mask)
         )
 
     def pull(self, _num):

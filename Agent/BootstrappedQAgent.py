@@ -1,13 +1,15 @@
 from ..Model.BootstrappedQModel import BootstrappedQModel
+from Agent import Agent
 import random
 from chainer import serializers, optimizers
+import numpy as np
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class BootstrappedQAgent(object):
+class BootstrappedQAgent(Agent):
 
     def __init__(self, _shared, _head, _env, _is_train=True,
                  _optimizer=None, _replay=None,
@@ -28,7 +30,7 @@ class BootstrappedQAgent(object):
         self.env = _env
         if self.is_train:
             self.target_q_func = BootstrappedQModel(_shared, _head, _K)
-            self.target_q_func.copyparams(q_func)
+            self.target_q_func.copyparams(self.q_func)
 
             self.optimizer = _optimizer
             self.optimizer.setup(self.q_func)
@@ -45,7 +47,7 @@ class BootstrappedQAgent(object):
         self.grad_clip = _grad_clip
 
     def startNewGame(self):
-        super(BootstrappedQAgent, self).startNewGame():
+        super(BootstrappedQAgent, self).startNewGame()
         self.use_head = random.randint(0, self.K - 1)
         logger.info('Use head: ' + str(self.use_head))
 
@@ -68,7 +70,7 @@ class BootstrappedQAgent(object):
             # store replay_tuple into memory pool
             self.replay.push(
                 cur_state, action, reward, next_state,
-                np.random.binomial(1, self.p, (self.K)).tolist()
+                np.random.binomial(1, self.mask_p, (self.K)).tolist()
             )
 
         return self.env.in_game
@@ -76,32 +78,23 @@ class BootstrappedQAgent(object):
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
         cur_output = self.QFunc(self.q_func, _cur_x, True)
-        if self.double_q:
-            # get next outputs, NOT target
-            next_output = self.QFunc(self.q_func, _next_x, False)
-        else:
-            next_output = self.QFunc(self.target_q_func, _next_x, False)
+        # get next outputs, NOT target
+        next_output = self.QFunc(self.q_func, _next_x, False)
 
-        if self.bootstrap:
-            # choose next action for each output
-            next_action = [
-                self.env.getBestAction(
-                    o.data,
-                    _state_list
-                ) for o in next_output  # for each head in Model
-            ]
-        else:
-            # only one head
-            next_action = self.env.getBestAction(
-                next_output.data, _state_list)
+        # choose next action for each output
+        next_action = [
+            self.env.getBestAction(
+                o.data,
+                _state_list
+            ) for o in next_output  # for each head in Model
+        ]
 
-        if self.double_q:
-            # get next outputs, target
-            next_output = self.QFunc(self.target_q_func, _next_x, False)
+        # get next outputs, target
+        next_output = self.QFunc(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action,
-             _batch_tuples, _err_count=None, _k=None):
+             _batch_tuples, _err_list, _err_count, _k):
         # alloc
         if self.gpu:
             _cur_output.grad = cupy.zeros_like(_cur_output.data)
@@ -111,7 +104,7 @@ class BootstrappedQAgent(object):
         # compute grad from each tuples
         for i in range(len(_batch_tuples)):
             # if use bootstrap and masked
-            if self.bootstrap and not _batch_tuples[i].mask[_k]:
+            if not _batch_tuples[i].mask[_k]:
                 continue
 
             cur_action_value = \
@@ -126,96 +119,49 @@ class BootstrappedQAgent(object):
             loss = cur_action_value - target_value
             _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
 
-            if self.prioritized_replay:
-                # count err
-                if cur_action_value:
-                    _batch_tuples[i].err += abs(loss / cur_action_value)
-                    if _err_count:
-                        _err_count[i] += 1
-
-    def gradWeight(self, _cur_output, _weights):
-        # multiply weights with grad
-        if self.gpu:
-            _cur_output.grad = cupy.multiply(
-                _cur_output.grad, _weights)
-        else:
-            _cur_output.grad = np.multiply(
-                _cur_output.grad, _weights)
-
-    def gradClip(self, _cur_output, _value=1):
-        # clip grads
-        if self.gpu:
-            _cur_output.grad = cupy.clip(
-                _cur_output.grad, -_value, _value)
-        else:
-            _cur_output.grad = np.clip(
-                _cur_output.grad, -_value, _value)
+            _err_list[i] += abs(loss)
+            _err_count[i] += 1
 
     def train(self):
         # clear grads
         self.q_func.zerograds()
 
         # pull tuples from memory pool
-        batch_tuples = self.replay.pull(self.batch_size)
+        batch_tuples, weights = self.replay.pull(self.batch_size)
         if not len(batch_tuples):
             return
 
         cur_x, next_x = self.getInputs(batch_tuples)
-
         # if bootstrap, they are all list for heads
         cur_output, next_output, next_action = self.forward(
             cur_x, next_x, [t.next_state for t in batch_tuples])
-
-        if self.prioritized_replay:
-            # clear err of tuples
-            for t in batch_tuples:
-                t.err = 0.
-            # if prioritized_replay, then we need bias weights
-                weights = self.getWeights(batch_tuples)
-
-        if self.bootstrap:
-            if self.prioritized_replay:
-                # store err count
-                err_count = [0.] * len(batch_tuples)
-            else:
-                err_count = None
-            # compute grad for each head
-            for k in range(self.K):
-                self.grad(cur_output[k], next_output[k], next_action[k],
-                          batch_tuples, err_count, k)
-                if self.prioritized_replay:
-                    self.gradWeight(cur_output[k], weights)
-                if self.grad_clip:
-                    self.gradClip(cur_output[k], self.grad_clip)
-                # backward
-                cur_output[k].backward()
-
-            # adjust grads of shared
-            for param in self.q_func.shared.params():
-                param.grad /= self.K
-
-            if self.prioritized_replay:
-                # avg err
-                for i in range(len(batch_tuples)):
-                    if err_count[i] > 0:
-                        batch_tuples[i].err /= err_count[i]
-        else:
-            self.grad(cur_output, next_output, next_action,
-                      batch_tuples)
-            if self.prioritized_replay:
-                self.gradWeight(cur_output, weights)
+        # compute grad for each head
+        err_list = [0.] * len(batch_tuples)
+        err_count = [0.] * len(batch_tuples)
+        for k in range(self.K):
+            self.grad(cur_output[k], next_output[k], next_action[k],
+                      batch_tuples, err_list, err_count, k)
+            if weights is not None:
+                self.gradWeight(cur_output[k], weights)
             if self.grad_clip:
-                self.gradClip(cur_output, self.grad_clip)
+                self.gradClip(cur_output[k], self.grad_clip)
             # backward
-            cur_output.backward()
+            cur_output[k].backward()
+
+        # adjust grads of shared
+        for param in self.q_func.shared.params():
+            param.grad /= self.K
 
         # update params
         self.optimizer.update()
 
-        if self.prioritized_replay:
-            self.replay.merge(self.alpha)
-        else:
-            self.replay.merge()
+        for i in range(len(err_list)):
+            if err_count[i] > 0:
+                err_list[i] /= err_count[i]
+            else:
+                err_list[i] = None
+        self.replay.setErr(batch_tuples, err_list)
+        self.replay.merge()
 
     def chooseAction(self, _model, _state):
         if self.is_train:
@@ -244,6 +190,7 @@ class BootstrappedQAgent(object):
                     action_dict[action] = 1
                 else:
                     action_dict[action] += 1
+            logger.info(str(action_dict))
             max_k = -1
             max_v = 0
             for k, v in zip(action_dict.keys(), action_dict.values()):
@@ -251,12 +198,3 @@ class BootstrappedQAgent(object):
                     max_k = k
                     max_v = v
             return max_k
-
-    def updateTargetQFunc(self):
-        logger.info('')
-        self.target_q_func.copyparams(self.q_func)
-
-    def save(self, _step):
-        filename = './models/step_' + str(_step)
-        logger.info(filename)
-        serializers.save_npz(filename, self.q_func)

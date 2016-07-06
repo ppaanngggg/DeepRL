@@ -3,7 +3,7 @@ import numpy as np
 
 class PrioritizedReplayTuple:
 
-    def __init__(self, _state, _action, _reward, _next_state):
+    def __init__(self, _state, _action, _reward, _next_state, _mask=None):
         self.state = _state
         self.action = _action
         self.reward = _reward
@@ -11,6 +11,7 @@ class PrioritizedReplayTuple:
         self.P = None
         self.p = None
         self.err = None
+        self.mask = _mask
 
     def show(self):
         print '----- begin -----'
@@ -21,6 +22,8 @@ class PrioritizedReplayTuple:
         print 'P:', self.P
         print 'p:', self.p
         print 'err:', self.err
+        if self.mask is not None:
+            print 'mask:', self.mask
         print '----- end -----'
 
 
@@ -35,8 +38,9 @@ class PrioritizedReplay():
         self.memory_pool = []
         self.tmp_memory_pool = []
 
-    def push(self, _state, _action, _reward, _next_state):
-        _tuple = PrioritizedReplayTuple(_state, _action, _reward, _next_state)
+    def push(self, _state, _action, _reward, _next_state, _mask):
+        _tuple = PrioritizedReplayTuple(
+            _state, _action, _reward, _next_state, _mask)
         # if use prioritized_replay, need to init P for new tuples
         if len(self.memory_pool):
             _tuple.P = max([t.P for t in self.memory_pool])
@@ -77,7 +81,8 @@ class PrioritizedReplay():
 
     def setErr(self, _batch_tuples, _err_list):
         for t, e in zip(_batch_tuples, _err_list):
-            t.err = e
+            if e is not None:
+                t.err = e
 
     def merge(self):
         self.memory_pool += self.tmp_memory_pool
