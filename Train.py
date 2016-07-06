@@ -1,6 +1,7 @@
 import logging
 import sys
 from select import select
+from time import sleep
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -38,8 +39,20 @@ class Train(object):
                 if not self.step_count % self.step_save:
                     self.agent.save(self.epoch, self.step_local)
 
+                # cmd
                 rlist, _, _ = select([sys.stdin], [], [], 0.001)
                 if rlist:
-                    print raw_input('interrupted')
+                    print '[[[ interrupted ]]]'
+                    s = sys.stdin.readline().strip()
+                    while True:
+                        print '[[[ Please input (save, quit, ...) ]]]'
+                        s = sys.stdin.readline().strip()
+                        if s == 'save':
+                            self.agent.save(self.epoch, self.step_local)
+                        elif s == 'quit':
+                            break
+                        else:
+                            print '[[[ unknow cmd... ]]]'
+                            pass
                 else:
                     pass
