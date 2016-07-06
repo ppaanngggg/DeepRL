@@ -1,4 +1,6 @@
 import logging
+import sys
+from select import select
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -35,3 +37,9 @@ class Train(object):
                     self.agent.updateTargetQFunc()
                 if not self.step_count % self.step_save:
                     self.agent.save(self.epoch, self.step_local)
+
+                rlist, _, _ = select([sys.stdin], [], [], 0.001)
+                if rlist:
+                    print raw_input('interrupted')
+                else:
+                    pass
