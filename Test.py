@@ -1,4 +1,3 @@
-import Config
 import logging
 
 class Test(object):
