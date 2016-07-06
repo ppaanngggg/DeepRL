@@ -8,8 +8,8 @@ class Actor(Chain):
         super(Actor, self).__init__(shared=_shared, actor=_actor)
 
     def __call__(self, _x):
-        y = self.shared(_x)
-        return self.actor(y)
+        y = self.shared(_x, self.is_train)
+        return self.actor(y, self.is_train)
 
     def training(self):
         self.is_train = True
@@ -25,8 +25,8 @@ class Critic(Chain):
         super(Critic, self).__init__(shared=_shared, critic=_critic)
 
     def __call__(self, _x):
-        y = self.shared(_x)
-        return self.critic(y)
+        y = self.shared(_x, self.is_train)
+        return self.critic(y, self.is_train)
 
     def training(self):
         self.is_train = True

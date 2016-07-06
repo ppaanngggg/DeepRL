@@ -52,17 +52,18 @@ class Agent(object):
             _cur_output.grad = np.clip(
                 _cur_output.grad, -_value, _value)
 
-    def QFunc(self, _model, _x_data, _train=True):
-        def toVariable(_data):
-            if type(_data) is list:
-                return [toVariable(d) for d in _data]
-            else:
-                return Variable(_data)
+    def toVariable(self, _data):
+        if type(_data) is list:
+            return [self.toVariable(d) for d in _data]
+        else:
+            return Variable(_data)
+
+    def func(self, _model, _x_data, _train=True):
         if _train:
             _model.training()
         else:
             _model.evaluating()
-        return _model(toVariable(_x_data))
+        return _model(self.toVariable(_x_data))
 
     def updateTargetQFunc(self):
         logger.info('update target func')

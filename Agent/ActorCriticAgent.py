@@ -1,5 +1,5 @@
 from ..Model.ActorCriticModel import Actor, Critic
-from Agent import Agent
+from QAgent import QAgent
 import random
 from chainer import serializers
 import numpy as np
@@ -9,10 +9,10 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class ActorCriticAgent(Agent):
+class ActorCriticAgent(QAgent):
 
     def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
-                 _optimizer=None, _replay=None,
+                 _actor_optimizer=None, _critic_optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=1.):
@@ -22,18 +22,20 @@ class ActorCriticAgent(Agent):
             _actor (class):
             _critic (class):
         """
-        super(ActorCriticAgent, self).__init__()
 
         self.is_train = _is_train
 
-        self.q_func = QModel(_model())
+        self.p_func = Actor(_shared(), _actor())
+        self.q_func = Critic(_shared(), _critic())
         self.env = _env
         if self.is_train:
-            self.target_q_func = QModel(_model())
+            self.target_q_func = Critic(_shared(), _critic())
             self.target_q_func.copyparams(self.q_func)
 
-            self.optimizer = _optimizer
-            self.optimizer.setup(self.q_func)
+            self.actor_optimizer = _actor_optimizer
+            self.critic_optimizer = _critic_optimizer
+            self.actor_optimizer.setup(self.p_func)
+            self.critic_optimizer.setup(self.q_func)
             self.replay = _replay
 
         self.gpu = _gpu
@@ -55,7 +57,7 @@ class ActorCriticAgent(Agent):
         # get current state
         cur_state = self.env.getState()
         # choose action in step
-        action = self.chooseAction(self.q_func, cur_state)
+        action = self.chooseAction(self.p_func, cur_state)
         # do action and get reward
         reward = self.env.doAction(action)
 
@@ -71,16 +73,16 @@ class ActorCriticAgent(Agent):
 
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
-        cur_output = self.QFunc(self.q_func, _cur_x, True)
+        cur_output = self.func(self.q_func, _cur_x, True)
         # get next outputs, NOT target
-        next_output = self.QFunc(self.q_func, _next_x, False)
+        next_output = self.func(self.q_func, _next_x, False)
 
         # only one head
         next_action = self.env.getBestAction(
             next_output.data, _state_list)
 
         # get next outputs, target
-        next_output = self.QFunc(self.target_q_func, _next_x, False)
+        next_output = self.func(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action,
@@ -137,25 +139,3 @@ class ActorCriticAgent(Agent):
 
         # merget tmp replay into pool
         self.replay.merge()
-
-    def chooseAction(self, _model, _state):
-        if self.is_train:
-            # update epsilon
-            self.epsilon = max(
-                self.epsilon_underline,
-                self.epsilon * self.epsilon_decay
-            )
-            random_value = random.random()
-            if random_value < self.epsilon:
-                # randomly choose
-                return self.env.getRandomAction(_state)
-            else:
-                # use model to choose
-                x_data = self.env.getX(_state)
-                output = self.QFunc(_model, x_data, False)
-                return self.env.getBestAction(output.data, [_state])[0]
-        else:
-            x_data = self.env.getX(_state)
-            output = self.QFunc(_model, x_data, False)
-            logger.info(str(output.data))
-            return self.env.getBestAction(output.data, [_state])[0]

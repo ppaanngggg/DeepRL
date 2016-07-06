@@ -22,7 +22,6 @@ class BootstrappedQAgent(Agent):
             _shard (class): shared model
             _head (class): head model
         """
-        super(BootstrappedQAgent, self).__init__()
 
         self.is_train = _is_train
 
@@ -77,9 +76,9 @@ class BootstrappedQAgent(Agent):
 
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
-        cur_output = self.QFunc(self.q_func, _cur_x, True)
+        cur_output = self.func(self.q_func, _cur_x, True)
         # get next outputs, NOT target
-        next_output = self.QFunc(self.q_func, _next_x, False)
+        next_output = self.func(self.q_func, _next_x, False)
 
         # choose next action for each output
         next_action = [
@@ -90,7 +89,7 @@ class BootstrappedQAgent(Agent):
         ]
 
         # get next outputs, target
-        next_output = self.QFunc(self.target_q_func, _next_x, False)
+        next_output = self.func(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action,
@@ -177,12 +176,12 @@ class BootstrappedQAgent(Agent):
             else:
                 # use model to choose
                 x_data = self.env.getX(_state)
-                output = self.QFunc(_model, x_data, False)
+                output = self.func(_model, x_data, False)
                 output = output[self.use_head]
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)
-            output = self.QFunc(_model, x_data, False)
+            output = self.func(_model, x_data, False)
             action_dict = {}
             for o in output:
                 action = self.env.getBestAction(o.data, [_state])[0]

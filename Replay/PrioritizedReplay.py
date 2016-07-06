@@ -38,7 +38,7 @@ class PrioritizedReplay():
         self.memory_pool = []
         self.tmp_memory_pool = []
 
-    def push(self, _state, _action, _reward, _next_state, _mask):
+    def push(self, _state, _action, _reward, _next_state, _mask=None):
         _tuple = PrioritizedReplayTuple(
             _state, _action, _reward, _next_state, _mask)
         # if use prioritized_replay, need to init P for new tuples

@@ -20,7 +20,6 @@ class QAgent(Agent):
         Args:
             _model (class): model
         """
-        super(QAgent, self).__init__()
 
         self.is_train = _is_train
 
@@ -69,16 +68,16 @@ class QAgent(Agent):
 
     def forward(self, _cur_x, _next_x, _state_list):
         # get cur outputs
-        cur_output = self.QFunc(self.q_func, _cur_x, True)
+        cur_output = self.func(self.q_func, _cur_x, True)
         # get next outputs, NOT target
-        next_output = self.QFunc(self.q_func, _next_x, False)
+        next_output = self.func(self.q_func, _next_x, False)
 
         # only one head
         next_action = self.env.getBestAction(
             next_output.data, _state_list)
 
         # get next outputs, target
-        next_output = self.QFunc(self.target_q_func, _next_x, False)
+        next_output = self.func(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
     def grad(self, _cur_output, _next_output, _next_action, _batch_tuples):
@@ -149,10 +148,10 @@ class QAgent(Agent):
             else:
                 # use model to choose
                 x_data = self.env.getX(_state)
-                output = self.QFunc(_model, x_data, False)
+                output = self.func(_model, x_data, False)
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)
-            output = self.QFunc(_model, x_data, False)
+            output = self.func(_model, x_data, False)
             logger.info(str(output.data))
             return self.env.getBestAction(output.data, [_state])[0]
