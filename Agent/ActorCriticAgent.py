@@ -1,7 +1,8 @@
 from ..Model.ActorCriticModel import Actor, Critic
 from QAgent import QAgent
 import random
-from chainer import serializers
+from chainer import serializers, Variable
+import chainer.functions as F
 import numpy as np
 
 import logging
@@ -71,47 +72,54 @@ class ActorCriticAgent(QAgent):
 
         return self.env.in_game
 
-    def forward(self, _cur_x, _next_x, _state_list):
+    def forward(self, _cur_x, _next_x):
         # get cur outputs
         cur_output = self.func(self.q_func, _cur_x, True)
-        # get next outputs, NOT target
-        next_output = self.func(self.q_func, _next_x, False)
-
-        # only one head
-        next_action = self.env.getBestAction(
-            next_output.data, _state_list)
-
+        # get cur softmax of actor
+        cur_softmax = F.softmax(self.func(self.p_func, _cur_x, True))
         # get next outputs, target
         next_output = self.func(self.target_q_func, _next_x, False)
-        return cur_output, next_output, next_action
+        return cur_output, cur_softmax, next_output
 
-    def grad(self, _cur_output, _next_output, _next_action,
-             _batch_tuples, _err_count=None, _k=None):
+    def grad(self, _cur_output, _cur_softmax, _next_output, _batch_tuples):
         # alloc
         if self.gpu:
             _cur_output.grad = cupy.zeros_like(_cur_output.data)
         else:
             _cur_output.grad = np.zeros_like(_cur_output.data)
 
+        cur_action = np.zeros_like(_cur_softmax.data)
+        for i in range(len(_batch_tuples)):
+            cur_action[i][_batch_tuples[i].action] = 1
+        cross_entropy = F.batch_matmul(_cur_softmax, Variable(cur_action),
+                                       transa=True)
+        print cross_entropy.data
+        cross_entropy = F.log(cross_entropy)
+        cross_entropy = F.reshape(cross_entropy, (len(cross_entropy.data), 1))
         # compute grad from each tuples
         err_list = []
         for i in range(len(_batch_tuples)):
-            cur_action_value = \
-                _cur_output.data[i][_batch_tuples[i].action].tolist()
+            cur_value = _cur_output.data[i][0].tolist()
             reward = _batch_tuples[i].reward
             target_value = reward
             # if not empty position, not terminal state
             if _batch_tuples[i].next_state.in_game:
-                next_action_value = \
-                    _next_output.data[i][_next_action[i]].tolist()
-                target_value += self.gamma * next_action_value
-            loss = cur_action_value - target_value
-            _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
+                next_value = _next_output.data[i][0].tolist()
+                target_value += self.gamma * next_value
+            loss = cur_value - target_value
+            cross_entropy.data[i] *= -loss
+            _cur_output.grad[i][0] = 2 * loss
             err_list.append(abs(loss))
-        return err_list
+
+        cross_entropy = F.clip(cross_entropy, -1., 1.)
+        cross_entropy.grad = np.zeros_like(cross_entropy.data)
+        cross_entropy.grad[cross_entropy.data > 0] = 1
+        cross_entropy.grad[cross_entropy.data < 0] = -1
+        return err_list, cross_entropy
 
     def train(self):
         # clear grads
+        self.p_func.zerograds()
         self.q_func.zerograds()
 
         # pull tuples from memory pool
@@ -122,20 +130,22 @@ class ActorCriticAgent(QAgent):
         # get inputs from batch
         cur_x, next_x = self.getInputs(batch_tuples)
         # compute forward
-        cur_output, next_output, next_action = self.forward(
-            cur_x, next_x, [t.next_state for t in batch_tuples])
+        cur_output, cur_softmax, next_output = self.forward(cur_x, next_x)
         # fill grad
-        err_list = self.grad(cur_output, next_output,
-                             next_action, batch_tuples)
+        err_list, cross_entropy = self.grad(
+            cur_output, cur_softmax, next_output, batch_tuples)
         self.replay.setErr(batch_tuples, err_list)
         if weights is not None:
             self.gradWeight(cur_output, weights)
+            self.gradWeight(cross_entropy, weights)
         if self.grad_clip:
             self.gradClip(cur_output, self.grad_clip)
         # backward
         cur_output.backward()
+        cross_entropy.backward()
         # update params
-        self.optimizer.update()
+        self.actor_optimizer.update()
+        self.critic_optimizer.update()
 
         # merget tmp replay into pool
         self.replay.merge()
