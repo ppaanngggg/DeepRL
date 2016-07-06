@@ -1,4 +1,4 @@
-from ..Model.QModel import QModel
+from ..Model.ActorCriticModel import Actor, Critic
 from Agent import Agent
 import random
 from chainer import serializers
@@ -9,18 +9,20 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class QAgent(Agent):
+class ActorCriticAgent(Agent):
 
-    def __init__(self, _model, _env, _is_train=True,
+    def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
                  _optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=1.):
         """
         Args:
-            _model (class): model
+            _shared (class):
+            _actor (class):
+            _critic (class):
         """
-        super(QAgent, self).__init__()
+        super(ActorCriticAgent, self).__init__()
 
         self.is_train = _is_train
 
