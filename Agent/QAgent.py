@@ -81,8 +81,7 @@ class QAgent(Agent):
         next_output = self.QFunc(self.target_q_func, _next_x, False)
         return cur_output, next_output, next_action
 
-    def grad(self, _cur_output, _next_output, _next_action,
-             _batch_tuples, _err_count=None, _k=None):
+    def grad(self, _cur_output, _next_output, _next_action, _batch_tuples):
         # alloc
         if self.gpu:
             _cur_output.grad = cupy.zeros_like(_cur_output.data)
@@ -123,7 +122,6 @@ class QAgent(Agent):
         # fill grad
         err_list = self.grad(cur_output, next_output,
                              next_action, batch_tuples)
-        self.replay.setErr(batch_tuples, err_list)
         if weights is not None:
             self.gradWeight(cur_output, weights)
         if self.grad_clip:
@@ -134,6 +132,7 @@ class QAgent(Agent):
         self.optimizer.update()
 
         # merget tmp replay into pool
+        self.replay.setErr(batch_tuples, err_list)
         self.replay.merge()
 
     def chooseAction(self, _model, _state):
