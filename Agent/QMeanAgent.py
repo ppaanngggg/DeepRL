@@ -1,5 +1,5 @@
 from ..Model.QModel import QModel
-from Agent import QAgent
+from QAgent import QAgent
 import random
 from chainer import serializers
 import numpy as np
