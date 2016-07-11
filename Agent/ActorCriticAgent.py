@@ -77,6 +77,7 @@ class ActorCriticAgent(QAgent):
         cur_output = self.func(self.q_func, _cur_x, True)
         # get cur softmax of actor
         cur_softmax = F.softmax(self.func(self.p_func, _cur_x, True))
+        cur_softmax.data[cur_softmax.data < 0.01] = 0.01
         # get next outputs, target
         next_output = self.func(self.target_q_func, _next_x, False)
         return cur_output, cur_softmax, next_output
@@ -93,9 +94,7 @@ class ActorCriticAgent(QAgent):
             cur_action[i][_batch_tuples[i].action] = 1
         cross_entropy = F.batch_matmul(_cur_softmax, Variable(cur_action),
                                        transa=True)
-        print cross_entropy.data
-        cross_entropy = F.log(cross_entropy)
-        cross_entropy = F.reshape(cross_entropy, (len(cross_entropy.data), 1))
+        cross_entropy = -F.log(cross_entropy)
         # compute grad from each tuples
         err_list = []
         for i in range(len(_batch_tuples)):
@@ -107,14 +106,14 @@ class ActorCriticAgent(QAgent):
                 next_value = _next_output.data[i][0].tolist()
                 target_value += self.gamma * next_value
             loss = cur_value - target_value
-            cross_entropy.data[i] *= -loss
+            cross_entropy.data[i] *= target_value
             _cur_output.grad[i][0] = 2 * loss
             err_list.append(abs(loss))
 
-        cross_entropy = F.clip(cross_entropy, -1., 1.)
-        cross_entropy.grad = np.zeros_like(cross_entropy.data)
-        cross_entropy.grad[cross_entropy.data > 0] = 1
-        cross_entropy.grad[cross_entropy.data < 0] = -1
+        cross_entropy.grad = np.copy(cross_entropy.data)
+        # for s, g, a in zip(_cur_softmax.data, cross_entropy.grad, _batch_tuples):
+        #     print s, g, a.action
+        # raw_input()
         return err_list, cross_entropy
 
     def train(self):
@@ -137,7 +136,6 @@ class ActorCriticAgent(QAgent):
         self.replay.setErr(batch_tuples, err_list)
         if weights is not None:
             self.gradWeight(cur_output, weights)
-            self.gradWeight(cross_entropy, weights)
         if self.grad_clip:
             self.gradClip(cur_output, self.grad_clip)
         # backward
@@ -149,3 +147,12 @@ class ActorCriticAgent(QAgent):
 
         # merget tmp replay into pool
         self.replay.merge()
+
+    def save(self, _epoch, _step):
+        filename = './models/epoch_' + str(_epoch) + '_step_' + str(_step)
+        logger.info(filename)
+        serializers.save_npz(filename, self.p_func)
+
+    def load(self, filename):
+        logger.info(filename)
+        serializers.load_npz(filename, self.p_func)
