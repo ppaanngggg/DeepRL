@@ -1,5 +1,5 @@
 from ..Model.ActorCriticModel import Actor, Critic
-from QAgent import QAgent
+from ActorCriticAgent import ActorCriticAgent
 import random
 from chainer import serializers, Variable
 import chainer.functions as F
@@ -10,42 +10,41 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class ActorCriticAgent(QAgent):
+class NFSPAgent(ActorCriticAgent):
 
     def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
-                 _actor_optimizer=None, _critic_optimizer=None, _replay=None,
+                 _actor_optimizer=None, _critic_optimizer=None,
+                 _actor_replay=None, _critic_replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
-                 _grad_clip=1.):
+                 _grad_clip=1., _eta=0.1):
         """
         Args:
             _shared (class):
             _actor (class):
             _critic (class):
         """
-
-        self.is_train = _is_train
-
-        self.p_func = Actor(_shared(), _actor())
-        self.q_func = Critic(_shared(), _critic())
-        self.env = _env
+        super(ActorCriticAgent, self).__init__(
+            _shared, _actor, _env, _is_train,
+            _actor_optimizer, _critic_optimizer, _critic_replay,
+            _gpu, _gamma, _batch_size,
+            _epsilon, _epsilon_decay, _epsilon_underline,
+            _grad_clip
+        )
         if self.is_train:
-            self.target_q_func = Critic(_shared(), _critic())
-            self.target_q_func.copyparams(self.q_func)
+            self.actor_replay = _actor_replay
+            self.critic_replay = _critic_replay
+            self.eta = _eta
 
-            self.actor_optimizer = _actor_optimizer
-            self.critic_optimizer = _critic_optimizer
-            self.actor_optimizer.setup(self.p_func)
-            self.critic_optimizer.setup(self.q_func)
-            self.replay = _replay
-
-        self.gpu = _gpu
-        self.gamma = _gamma
-        self.batch_size = 32
-        self.epsilon = _epsilon
-        self.epsilon_decay = _epsilon_decay
-        self.epsilon_underline = _epsilon_underline
-        self.grad_clip = _grad_clip
+    def startNewGame(self):
+        if self.is_train:
+            if random.random() < self.eta:
+                self.use_func = self.p_func
+            else:
+                self.use_func = self.q_func
+        else:
+            self.use_func = self.p_func
+        super(NFSPAgent, self).startNewGame()
 
     def step(self):
         """
