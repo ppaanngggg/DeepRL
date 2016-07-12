@@ -57,7 +57,7 @@ class NFSPAgent(ActorCriticAgent):
         # get current state
         cur_state = self.env.getState()
         # choose action in step
-        action = self.chooseAction(self.p_func, cur_state)
+        action = self.chooseAction(self.use_func, cur_state)
         # do action and get reward
         reward = self.env.doAction(action)
 
@@ -67,7 +67,9 @@ class NFSPAgent(ActorCriticAgent):
             # get new state
             next_state = self.env.getState()
             # store replay_tuple into memory pool
-            self.replay.push(cur_state, action, reward, next_state)
+            self.critic_replay.push(cur_state, action, reward, next_state)
+            if self.use_func == self.q_func:
+                self.critic_replay.push(cur_state, action, None, None)
 
         return self.env.in_game
 
@@ -116,13 +118,21 @@ class NFSPAgent(ActorCriticAgent):
         # raw_input()
         return err_list, cross_entropy
 
-    def train(self):
+    def train_q(self):
         # clear grads
-        self.p_func.zerograds()
         self.q_func.zerograds()
 
         # pull tuples from memory pool
-        batch_tuples, weights = self.replay.pull(self.batch_size)
+        batch_tuples, weights = self.critic_replay.pull(self.batch_size)
+        if not len(batch_tuples):
+            return
+
+    def train(self):
+        # clear grads
+        self.q_func.zerograds()
+
+        # pull tuples from memory pool
+        batch_tuples, weights = self.critic_replay.pull(self.batch_size)
         if not len(batch_tuples):
             return
 

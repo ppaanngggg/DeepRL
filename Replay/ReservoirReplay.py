@@ -1,5 +1,5 @@
 import numpy as np
-from Replay import Replay
+from Replay import ReplayTuple
 
 
 class ReservoirReplay():
