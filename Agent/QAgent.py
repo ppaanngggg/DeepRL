@@ -1,5 +1,5 @@
-from ..Model.QModel import QModel
-from Agent import Agent
+from ..Model import QModel
+from ValueAgent import ValueAgent
 import random
 from chainer import serializers
 import numpy as np
@@ -9,7 +9,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class QAgent(Agent):
+class QAgent(ValueAgent):
 
     def __init__(self, _model, _env, _is_train=True,
                  _optimizer=None, _replay=None,
