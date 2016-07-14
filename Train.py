@@ -35,7 +35,7 @@ class Train(object):
                 if not self.step_count % self.step_train:
                     self.agent.train()
                 if not self.step_count % self.step_update_target:
-                    self.agent.updateTargetQFunc()
+                    self.agent.updateTargetFunc()
                 if not self.step_count % self.step_save:
                     self.agent.save(self.epoch, self.step_local)
 

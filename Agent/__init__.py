@@ -1,4 +1,4 @@
 from QAgent import QAgent
 from QMeanAgent import QMeanAgent
-from BootstrappedQAgent import BootstrappedQAgent
+from BootQAgent import BootQAgent
 from ActorCriticAgent import ActorCriticAgent

@@ -1,13 +1,13 @@
 from chainer import Chain, ChainList
 
 
-class BootstrappedQModel(ChainList):
+class BootQModel(ChainList):
 
     def __init__(self, _shared, _head, _K):
         self.is_train = True
         self.shared = _shared()
         self.head_list = [_head() for _ in range(_K)]
-        super(BootstrappedQModel, self).__init__(
+        super(BootQModel, self).__init__(
             *(self.head_list + [self.shared]))
 
     def __call__(self, _x):

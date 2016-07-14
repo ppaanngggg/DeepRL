@@ -1,7 +1,6 @@
-from ..Model.BootstrappedQModel import BootstrappedQModel
+from ..Model import BootQModel
 from Agent import Agent
 import random
-from chainer import serializers, optimizers
 import numpy as np
 
 import logging
@@ -9,7 +8,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class BootstrappedQAgent(Agent):
+class BootQAgent(Agent):
 
     def __init__(self, _shared, _head, _env, _is_train=True,
                  _optimizer=None, _replay=None,
@@ -22,32 +21,33 @@ class BootstrappedQAgent(Agent):
             _shard (class): shared model
             _head (class): head model
         """
+        super(BootQAgent, self).__init__()
 
         self.is_train = _is_train
 
-        self.q_func = BootstrappedQModel(_shared, _head, _K)
+        self.q_func = BootQModel(_shared, _head, _K)
         self.env = _env
         if self.is_train:
-            self.target_q_func = BootstrappedQModel(_shared, _head, _K)
+            self.target_q_func = BootQModel(_shared, _head, _K)
             self.target_q_func.copyparams(self.q_func)
 
             self.optimizer = _optimizer
             self.optimizer.setup(self.q_func)
             self.replay = _replay
 
-        self.K = _K
-        self.mask_p = _mask_p
-        self.gpu = _gpu
-        self.gamma = _gamma
-        self.batch_size = 32
-        self.epsilon = _epsilon
-        self.epsilon_decay = _epsilon_decay
-        self.epsilon_underline = _epsilon_underline
-        self.grad_clip = _grad_clip
+        self.config.K = _K
+        self.config.mask_p = _mask_p
+        self.config.gpu = _gpu
+        self.config.gamma = _gamma
+        self.config.batch_size = 32
+        self.config.epsilon = _epsilon
+        self.config.epsilon_decay = _epsilon_decay
+        self.config.epsilon_underline = _epsilon_underline
+        self.config.grad_clip = _grad_clip
 
     def startNewGame(self):
-        super(BootstrappedQAgent, self).startNewGame()
-        self.use_head = random.randint(0, self.K - 1)
+        super(BootQAgent, self).startNewGame()
+        self.use_head = random.randint(0, self.config.K - 1)
         logger.info('Use head: ' + str(self.use_head))
 
     def step(self):
@@ -69,7 +69,8 @@ class BootstrappedQAgent(Agent):
             # store replay_tuple into memory pool
             self.replay.push(
                 cur_state, action, reward, next_state,
-                np.random.binomial(1, self.mask_p, (self.K)).tolist()
+                np.random.binomial(1, self.config.mask_p,
+                                   (self.config.K)).tolist()
             )
 
         return self.env.in_game
@@ -95,7 +96,7 @@ class BootstrappedQAgent(Agent):
     def grad(self, _cur_output, _next_output, _next_action,
              _batch_tuples, _err_list, _err_count, _k):
         # alloc
-        if self.gpu:
+        if self.config.gpu:
             _cur_output.grad = cupy.zeros_like(_cur_output.data)
         else:
             _cur_output.grad = np.zeros_like(_cur_output.data)
@@ -114,63 +115,49 @@ class BootstrappedQAgent(Agent):
             if _batch_tuples[i].next_state.in_game:
                 next_action_value = \
                     _next_output.data[i][_next_action[i]].tolist()
-                target_value += self.gamma * next_action_value
+                target_value += self.config.gamma * next_action_value
             loss = cur_action_value - target_value
             _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
 
             _err_list[i] += abs(loss)
             _err_count[i] += 1
 
-    def train(self):
-        # clear grads
-        self.q_func.zerograds()
-
-        # pull tuples from memory pool
-        batch_tuples, weights = self.replay.pull(self.batch_size)
-        if not len(batch_tuples):
-            return
-
-        cur_x, next_x = self.getInputs(batch_tuples)
+    def doTrain(self, _batch_tuples, _weights):
+        cur_x = self.getCurInputs(_batch_tuples)
+        next_x = self.getNextInputs(_batch_tuples)
         # if bootstrap, they are all list for heads
         cur_output, next_output, next_action = self.forward(
-            cur_x, next_x, [t.next_state for t in batch_tuples])
+            cur_x, next_x, [t.next_state for t in _batch_tuples])
         # compute grad for each head
-        err_list = [0.] * len(batch_tuples)
-        err_count = [0.] * len(batch_tuples)
-        for k in range(self.K):
+        err_list = [0.] * len(_batch_tuples)
+        err_count = [0.] * len(_batch_tuples)
+        for k in range(self.config.K):
             self.grad(cur_output[k], next_output[k], next_action[k],
-                      batch_tuples, err_list, err_count, k)
-            if weights is not None:
-                self.gradWeight(cur_output[k], weights)
-            if self.grad_clip:
-                self.gradClip(cur_output[k], self.grad_clip)
+                      _batch_tuples, err_list, err_count, k)
+            if _weights is not None:
+                self.gradWeight(cur_output[k], _weights)
+            if self.config.grad_clip:
+                self.gradClip(cur_output[k], self.config.grad_clip)
             # backward
             cur_output[k].backward()
 
         # adjust grads of shared
         for param in self.q_func.shared.params():
-            param.grad /= self.K
-
-        # update params
-        self.optimizer.update()
+            param.grad /= self.config.K
 
         for i in range(len(err_list)):
             if err_count[i] > 0:
                 err_list[i] /= err_count[i]
             else:
                 err_list[i] = None
-        self.replay.setErr(batch_tuples, err_list)
-        self.replay.merge()
+        return err_list
 
     def chooseAction(self, _model, _state):
         if self.is_train:
             # update epsilon
-            self.epsilon = max(
-                self.epsilon_underline,
-                self.epsilon * self.epsilon_decay
-            )
+            self.updateEpsilon()
             random_value = random.random()
-            if random_value < self.epsilon:
+            if random_value < self.config.epsilon:
                 # randomly choose
                 return self.env.getRandomAction(_state)
             else:
