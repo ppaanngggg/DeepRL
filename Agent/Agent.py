@@ -27,6 +27,8 @@ class Config(object):
         self.K = None
         # bootstrapped, p of mask
         self.mask_p = None
+        # NFSP when to use p_func
+        self.eta = None
 
 
 class Agent(object):
