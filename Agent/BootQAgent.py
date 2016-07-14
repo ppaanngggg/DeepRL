@@ -39,7 +39,7 @@ class BootQAgent(Agent):
         self.config.mask_p = _mask_p
         self.config.gpu = _gpu
         self.config.gamma = _gamma
-        self.config.batch_size = 32
+        self.config.batch_size = _batch_size
         self.config.epsilon = _epsilon
         self.config.epsilon_decay = _epsilon_decay
         self.config.epsilon_underline = _epsilon_underline
