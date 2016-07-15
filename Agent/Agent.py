@@ -1,6 +1,7 @@
 import random
 from chainer import serializers, optimizers, Variable
 from chainer import cuda
+import cupy
 import numpy as np
 
 import logging
@@ -118,20 +119,14 @@ class Agent(object):
         # stack inputs
         cur_x = [self.env.getX(t.state) for t in _batch_tuples]
         # merge inputs into one array
-        if self.config.gpu:
-            cur_x = cupy.concatenate(cur_x, 0)
-        else:
-            cur_x = np.concatenate(cur_x, 0)
+        cur_x = np.concatenate(cur_x, 0)
         return cur_x
 
     def getNextInputs(self, _batch_tuples):
         # stack inputs
         next_x = [self.env.getX(t.next_state) for t in _batch_tuples]
         # merge inputs into one array
-        if self.config.gpu:
-            next_x = cupy.concatenate(next_x, 0)
-        else:
-            next_x = np.concatenate(next_x, 0)
+        next_x = np.concatenate(next_x, 0)
         return next_x
 
     def gradWeight(self, _variable, _weights):
@@ -148,6 +143,12 @@ class Agent(object):
         else:
             _variable.grad = np.clip(_variable.grad, -_value, _value)
 
+    def toGPU(self, _data):
+        if type(_data) is list:
+            return [self.toGPU(d) for d in _data]
+        else:
+            return cuda.to_gpu(_data)
+
     def toVariable(self, _data):
         if type(_data) is list:
             return [self.toVariable(d) for d in _data]
@@ -155,6 +156,8 @@ class Agent(object):
             return Variable(_data)
 
     def func(self, _model, _x_data, _train=True):
+        if self.config.gpu:
+            _x_data = self.toGPU(_x_data)
         if _train:
             _model.training()
         else:

@@ -1,7 +1,8 @@
 from ..Model import QModel
 from Agent import Agent
 import random
-from chainer import serializers
+from chainer import cuda
+import cupy
 import numpy as np
 
 import logging
@@ -29,9 +30,13 @@ class QAgent(Agent):
         self.is_train = _is_train
 
         self.q_func = QModel(_model())
+        if _gpu:
+            self.q_func.to_gpu()
         self.env = _env
         if self.is_train:
             self.target_q_func = QModel(_model())
+            if _gpu:
+                self.target_q_func.to_gpu()
             self.target_q_func.copyparams(self.q_func)
 
             self.q_opt = _optimizer
@@ -102,6 +107,8 @@ class QAgent(Agent):
         err_list = self.grad(cur_output, next_output,
                              next_action, _batch_tuples)
         if _weights is not None:
+            if self.config.gpu:
+                _weights = cuda.to_gpu(_weights)
             self.gradWeight(cur_output, _weights)
         if self.config.grad_clip:
             self.gradClip(cur_output, self.config.grad_clip)
