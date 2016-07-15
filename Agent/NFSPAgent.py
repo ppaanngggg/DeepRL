@@ -169,9 +169,10 @@ class NFSPAgent(Agent):
         super(NFSPAgent, self).train()
 
         batch_tuples, _ = self.p_replay.pull(self.config.batch_size)
-        x = self.getCurInputs(batch_tuples)
-        t = np.array([d.action for d in batch_tuples], np.int32)
-        y = self.p_func(x)
-        loss = F.softmax_cross_entropy(y, t)
-        loss.backward()
-        self.p_opt.update()
+        if len(batch_tuples) > 0:
+            x = self.getCurInputs(batch_tuples)
+            t = np.array([d.action for d in batch_tuples], np.int32)
+            y = self.p_func(x)
+            loss = F.softmax_cross_entropy(y, t)
+            loss.backward()
+            self.p_opt.update()
