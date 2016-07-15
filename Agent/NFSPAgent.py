@@ -56,9 +56,9 @@ class NFSPAgent(Agent):
     def startNewGame(self):
         if self.is_train:
             if random.random() < self.config.eta:
-                self.use_func = self.p_func
-            else:
                 self.use_func = self.q_func
+            else:
+                self.use_func = self.p_func
         else:
             self.use_func = self.p_func
         super(NFSPAgent, self).startNewGame()
