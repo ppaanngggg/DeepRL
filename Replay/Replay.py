@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class ReplayTuple:
+class ReplayTuple(object):
 
     def __init__(self, _state, _action, _reward, _next_state, _mask=None):
         self.state = _state
@@ -21,7 +21,7 @@ class ReplayTuple:
         print '----- end -----'
 
 
-class Replay():
+class Replay(object):
 
     def __init__(self, _N=1e4):
         self.N = int(_N)

@@ -2,7 +2,10 @@ from ..Model import QModel
 from Agent import Agent
 import random
 from chainer import cuda
-import cupy
+try:
+    import cupy
+except:
+    pass
 import numpy as np
 
 import logging
@@ -39,8 +42,9 @@ class QAgent(Agent):
                 self.target_q_func.to_gpu()
             self.target_q_func.copyparams(self.q_func)
 
-            self.q_opt = _optimizer
-            self.q_opt.setup(self.q_func)
+            if _optimizer:
+                self.q_opt = _optimizer
+                self.q_opt.setup(self.q_func)
             self.replay = _replay
 
         self.config.gpu = _gpu

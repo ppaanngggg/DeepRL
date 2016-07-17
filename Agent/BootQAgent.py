@@ -31,9 +31,10 @@ class BootQAgent(Agent):
             self.target_q_func = BootQModel(_shared, _head, _K)
             self.target_q_func.copyparams(self.q_func)
 
-            self.optimizer = _optimizer
-            self.optimizer.setup(self.q_func)
-            self.replay = _replay
+            if _optimizer:
+                self.q_opt = _optimizer
+                self.q_opt.setup(self.q_func)
+                self.replay = _replay
 
         self.config.K = _K
         self.config.mask_p = _mask_p

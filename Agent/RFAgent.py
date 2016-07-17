@@ -35,10 +35,13 @@ class RFAgent(Agent):
             self.target_v_func = Critic(_shared(), _critic())
             self.target_v_func.copyparams(self.v_func)
 
-            self.p_opt = _actor_optimizer
-            self.v_opt = _critic_optimizer
-            self.p_opt.setup(self.p_func)
-            self.v_opt.setup(self.v_func)
+            if _actor_optimizer:
+                self.p_opt = _actor_optimizer
+                self.p_opt.setup(self.p_func)
+            if _critic_optimizer:
+                self.v_opt = _critic_optimizer
+                self.v_opt.setup(self.v_func)
+
             self.replay = _replay
 
         self.config.gpu = _gpu

@@ -2,7 +2,7 @@ import numpy as np
 from Replay import ReplayTuple
 
 
-class ReservoirReplay():
+class ReservoirReplay(object):
 
     def __init__(self, _N=1e4):
         self.N = int(_N)

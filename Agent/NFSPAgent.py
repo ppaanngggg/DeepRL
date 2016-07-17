@@ -36,10 +36,13 @@ class NFSPAgent(Agent):
             self.target_q_func = Critic(_shared(), _critic())
             self.target_q_func.copyparams(self.q_func)
 
-            self.p_opt = _actor_optimizer
-            self.v_opt = _critic_optimizer
-            self.p_opt.setup(self.p_func)
-            self.v_opt.setup(self.q_func)
+            if _actor_optimizer:
+                self.p_opt = _actor_optimizer
+                self.p_opt.setup(self.p_func)
+            if _critic_optimizer:
+                self.v_opt = _critic_optimizer
+                self.v_opt.setup(self.q_func)
+
             self.p_replay = _actor_replay
             self.q_replay = _critic_replay
             self.replay = self.q_replay

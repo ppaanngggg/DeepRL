@@ -1,7 +1,10 @@
 import random
 from chainer import serializers, optimizers, Variable
 from chainer import cuda
-import cupy
+try:
+    import cupy
+except:
+    pass
 import numpy as np
 
 import logging
@@ -94,7 +97,6 @@ class Agent(object):
             self.q_func.zerograds()
         if self.p_func:
             self.p_func.zerograds()
-
         # pull tuples from memory pool
         batch_tuples, weights = self.replay.pull(self.config.batch_size)
         if not len(batch_tuples):
@@ -191,6 +193,7 @@ class Agent(object):
                 # use model to choose
                 x_data = self.env.getX(_state)
                 output = self.func(_model, x_data, False)
+                print output.data
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)
@@ -223,3 +226,17 @@ class Agent(object):
             self.target_q_func.copyparams(self.q_func)
         if self.target_p_func:
             self.target_p_func.copyparams(self.p_func)
+
+    def copyFunc(_agent):
+        if self.v_func and _agent.v_func:
+            self.v_func.copyparams(_agent.v_func)
+        if self.q_func and _agent.q_func:
+            self.q_func.copyparams(_agent.q_func)
+        if self.p_func and _agent.p_func:
+            self.p_func.copyparams(_agent.p_func)
+        if self.target_v_func and _agent.target_v_func:
+            self.target_v_func.copyparams(_agent.target_v_func)
+        if self.target_q_func and _agent.target_q_func:
+            self.target_q_func.copyparams(_agent.target_q_func)
+        if self.target_p_func and _agent.target_p_func:
+            self.target_p_func.copyparams(_agent.target_p_func)

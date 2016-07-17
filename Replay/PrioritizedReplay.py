@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class PrioritizedReplayTuple:
+class PrioritizedReplayTuple(object):
 
     def __init__(self, _state, _action, _reward, _next_state, _mask=None):
         self.state = _state
@@ -27,7 +27,7 @@ class PrioritizedReplayTuple:
         print '----- end -----'
 
 
-class PrioritizedReplay():
+class PrioritizedReplay(object):
 
     def __init__(self, _N=1e4, _alpha=0.7, _beta=0.5, _beta_add=1e-4):
         self.N = int(_N)
