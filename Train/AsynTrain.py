@@ -1,5 +1,8 @@
 from multiprocessing import Process, Queue, Lock
 import random
+import sys
+from select import select
+from chainer import cuda
 
 
 def func_train_process(_create_agent_func,
@@ -7,7 +10,6 @@ def func_train_process(_create_agent_func,
                        _step_update_func):
     random.seed()
     agent = _create_agent_func()
-    step_local = 0
 
     def set_params(_func, _params):
         for param, data in zip(_func.params(), _params):
@@ -69,11 +71,24 @@ def func_train_process(_create_agent_func,
 class AsynTrain(object):
 
     def __init__(self, _create_agent_func, _process_num=8,
-                 _step_update_func=5, _step_update_target=1e3,
+                 _step_update_func=5,
+                 _step_update_target=1e3,
+                 _step_save=1e6,
                  _v_opt=None, _q_opt=None, _p_opt=None):
         self.c2s_queue = Queue()
         self.s2c_queue = Queue()
         self.lock = Lock()
+
+        self.process_list = [
+            Process(
+                target=func_train_process,
+                args=(_create_agent_func,
+                      self.c2s_queue, self.s2c_queue, self.lock,
+                      _step_update_func))
+            for _ in range(_process_num)
+        ]
+        for process in self.process_list:
+            process.start()
 
         self.agent = _create_agent_func()
         self.v_func = self.agent.v_func
@@ -93,19 +108,9 @@ class AsynTrain(object):
         if _p_opt and self.p_func:
             self.p_opt.setup(self.p_func)
 
-        self.process_list = [
-            Process(
-                target=func_train_process,
-                args=(_create_agent_func,
-                      self.c2s_queue, self.s2c_queue, self.lock,
-                      _step_update_func))
-            for _ in range(_process_num)
-        ]
-        for process in self.process_list:
-            process.start()
-
         self.step_total = 0
         self.step_update_target = _step_update_target
+        self.step_save = _step_save
 
     def run(self):
         while True:
@@ -114,6 +119,8 @@ class AsynTrain(object):
                 self.step_total += 1
                 if self.step_total % self.step_update_target == 0:
                     self.agent.updateTargetFunc()
+                if self.step_total % self.step_save == 0:
+                    self.agent.save("", self.step_total)
                 self.s2c_queue.put('ack')
             elif fetch_data == 'params':
                 push_data = {}
@@ -158,3 +165,21 @@ class AsynTrain(object):
                 self.s2c_queue.put('ack')
             else:
                 raise Exception()
+
+            # cmd
+            rlist, _, _ = select([sys.stdin], [], [], 0.001)
+            if rlist:
+                print '[[[ interrupted ]]]'
+                s = sys.stdin.readline().strip()
+                while True:
+                    print '[[[ Please input (save, quit, ...) ]]]'
+                    s = sys.stdin.readline().strip()
+                    if s == 'save':
+                        self.agent.save("", self.step_total)
+                    elif s == 'quit':
+                        break
+                    else:
+                        print '[[[ unknow cmd... ]]]'
+                        pass
+            else:
+                pass

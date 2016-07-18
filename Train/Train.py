@@ -1,7 +1,6 @@
 import logging
 import sys
 from select import select
-from time import sleep
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
