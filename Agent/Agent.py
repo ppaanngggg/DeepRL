@@ -33,6 +33,8 @@ class Config(object):
         self.mask_p = None
         # NFSP when to use p_func
         self.eta = None
+        # for N step
+        self.step_len = None
 
 
 class Agent(object):
