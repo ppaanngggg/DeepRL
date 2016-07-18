@@ -8,6 +8,6 @@ class Test(object):
         self.agent.evaluating()
 
     def run(self):
-        self.agent.env.startNewGame()
+        self.agent.startNewGame()
         while self.agent.env.in_game:
             self.agent.step()
