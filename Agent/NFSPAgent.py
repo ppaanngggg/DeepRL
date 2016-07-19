@@ -1,4 +1,4 @@
-from ..Model.ActorCriticModel import Actor, Critic
+from ..Model.ACModel import Actor, Critic
 from Agent import Agent
 import random
 from chainer import serializers, Variable

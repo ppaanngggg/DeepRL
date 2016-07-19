@@ -195,6 +195,7 @@ class Agent(object):
                 # use model to choose
                 x_data = self.env.getX(_state)
                 output = self.func(_model, x_data, False)
+                print output.data
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)

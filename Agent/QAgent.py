@@ -69,8 +69,7 @@ class QAgent(Agent):
         next_output = self.func(self.q_func, _next_x, False)
 
         # only one head
-        next_action = self.env.getBestAction(
-            next_output.data, _state_list)
+        next_action = self.env.getBestAction(next_output.data, _state_list)
 
         # get next outputs, target
         next_output = self.func(self.target_q_func, _next_x, False)
