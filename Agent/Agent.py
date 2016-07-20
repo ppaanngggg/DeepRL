@@ -13,8 +13,14 @@ logger.setLevel(logging.DEBUG)
 
 
 class Config(object):
+    """
+    Config for Agent
+    """
 
     def __init__(self):
+        """
+        Alloc all configs
+        """
         # whether to use gpu
         self.gpu = None
         # gamma, decay param of reward
@@ -38,15 +44,19 @@ class Config(object):
 
 
 class Agent(object):
+    """
+    Super class of other agents
+    """
 
     def __init__(self):
+        # alloc all models
         self.v_func = None
         self.target_v_func = None
         self.q_func = None
         self.target_q_func = None
         self.p_func = None
         self.target_p_func = None
-
+        # alloc all optimizers
         self.v_opt = None
         self.q_opt = None
         self.p_opt = None
@@ -56,18 +66,29 @@ class Agent(object):
         self.config = Config()
 
     def training(self):
+        """
+        set agent to train mod
+        """
         self.is_train = True
 
     def evaluating(self):
+        """
+        set agent to evaluate mod
+        """
         self.is_train = False
 
     def startNewGame(self):
+        """
+        normal start new game, suitable for most agent
+        """
         while not self.env.in_game:
             logger.info('Env not in game')
             self.env.startNewGame()
 
     def step(self, _model):
         """
+        agent will get cur state and choose one action and execute
+
         Returns:
             still in game or not
         """
@@ -92,6 +113,9 @@ class Agent(object):
         return self.env.in_game
 
     def train(self):
+        """
+        train model
+        """
         # clear grads
         if self.v_func:
             self.v_func.zerograds()
@@ -106,6 +130,7 @@ class Agent(object):
 
         err_list = self.doTrain(batch_tuples, weights)
 
+        # if has optimizers, then update model
         if self.v_opt and self.v_func:
             self.v_opt.update()
         if self.q_opt and self.q_func:
@@ -113,13 +138,20 @@ class Agent(object):
         if self.p_opt and self.p_func:
             self.p_opt.update()
 
+        # set err and merge
         self.replay.setErr(batch_tuples, err_list)
         self.replay.merge()
 
     def doTrain(self, _batch_tuples, _err_list):
+        """
+        do train detail, need to be overwritten
+        """
         raise Exception()
 
     def getCurInputs(self, _batch_tuples):
+        """
+        get and stack cur inputs from tuples
+        """
         # stack inputs
         cur_x = [self.env.getX(t.state) for t in _batch_tuples]
         # merge inputs into one array
@@ -127,6 +159,9 @@ class Agent(object):
         return cur_x
 
     def getNextInputs(self, _batch_tuples):
+        """
+        get and stack next inputs from tuples
+        """
         # stack inputs
         next_x = [self.env.getX(t.next_state) for t in _batch_tuples]
         # merge inputs into one array
@@ -134,6 +169,9 @@ class Agent(object):
         return next_x
 
     def gradWeight(self, _variable, _weights):
+        """
+        multiply grad with weights
+        """
         # multiply weights with grad
         if self.config.gpu:
             _variable.grad = cupy.multiply(_variable.grad, _weights)
@@ -141,6 +179,9 @@ class Agent(object):
             _variable.grad = np.multiply(_variable.grad, _weights)
 
     def gradClip(self, _variable, _value=1):
+        """
+        clip grad with limit
+        """
         # clip grads
         if self.config.gpu:
             _variable.grad = cupy.clip(_variable.grad, -_value, _value)
@@ -148,18 +189,27 @@ class Agent(object):
             _variable.grad = np.clip(_variable.grad, -_value, _value)
 
     def toGPU(self, _data):
+        """
+        turn input to gpu recursively
+        """
         if type(_data) is list:
             return [self.toGPU(d) for d in _data]
         else:
             return cuda.to_gpu(_data)
 
     def toVariable(self, _data):
+        """
+        turn input to Variable recursively
+        """
         if type(_data) is list:
             return [self.toVariable(d) for d in _data]
         else:
             return Variable(_data)
 
     def func(self, _model, _x_data, _train=True):
+        """
+        do func use special model with input
+        """
         if self.config.gpu:
             _x_data = self.toGPU(_x_data)
         if _train:
@@ -169,6 +219,9 @@ class Agent(object):
         return _model(self.toVariable(_x_data))
 
     def updateTargetFunc(self):
+        """
+        update target if exit
+        """
         logger.info('update target func')
         if self.target_v_func and self.v_func:
             self.target_v_func.copyparams(self.v_func)
@@ -178,12 +231,18 @@ class Agent(object):
             self.target_p_func.copyparams(self.p_func)
 
     def updateEpsilon(self):
+        """
+        update epsilon
+        """
         self.config.epsilon = max(
             self.config.epsilon_underline,
             self.config.epsilon * self.config.epsilon_decay
         )
 
     def chooseAction(self, _model, _state):
+        """
+        choose action by special model in special state, suitable for most agent
+        """
         if self.is_train:
             # update epsilon
             self.updateEpsilon()

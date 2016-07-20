@@ -31,7 +31,7 @@ class QAgent(Agent):
         super(QAgent, self).__init__()
 
         self.is_train = _is_train
-
+        # create 
         self.q_func = QModel(_model())
         if _gpu:
             self.q_func.to_gpu()
