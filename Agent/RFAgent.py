@@ -15,7 +15,6 @@ class RFAgent(Agent):
     def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
                  _actor_optimizer=None, _critic_optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
-                 _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=1.):
         """
         Args:
@@ -47,9 +46,6 @@ class RFAgent(Agent):
         self.config.gpu = _gpu
         self.config.gamma = _gamma
         self.config.batch_size = _batch_size
-        self.config.epsilon = _epsilon
-        self.config.epsilon_decay = _epsilon_decay
-        self.config.epsilon_underline = _epsilon_underline
         self.config.grad_clip = _grad_clip
 
     def step(self):
@@ -97,8 +93,6 @@ class RFAgent(Agent):
             err_list.append(abs(loss))
 
         cross_entropy.grad = np.copy(cross_entropy.data)
-        # for s, g, a in zip(_cur_softmax.data, cross_entropy.grad, _batch_tuples):
-        #     print s, g, a.action
         return err_list, cross_entropy
 
     def doTrain(self, _batch_tuples, _weights):
@@ -119,3 +113,12 @@ class RFAgent(Agent):
         cross_entropy.backward()
 
         return err_list
+
+    def chooseAction(self, _model, _state):
+        x_data = self.env.getX(_state)
+        output = self.func(_model, x_data, False)
+        logger.info(str(F.softmax(output).data))
+        if self.is_train:
+            return self.env.getSoftAction(output.data, [_state])[0]
+        else:
+            return self.env.getBestAction(output.data, [_state])[0]

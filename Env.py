@@ -57,6 +57,15 @@ class Env(object):
                 raise Exception()
         return ret
 
+    def getSoftAction(self, _data, _state_list):
+        ret = self.doGetSoftAction(_data, _state_list)
+        if type(ret) is not list:
+            raise Exception()
+        for d in ret:
+            if type(d) is not int:
+                raise Exception()
+        return ret
+
     # need to be overwritten by user
     def doStartNewGame(self):
         raise Exception()
@@ -74,4 +83,7 @@ class Env(object):
         raise Exception()
 
     def doGetBestAction(self, _data, _state_list):
+        raise Exception()
+
+    def doGetSoftAction(self, _data, _state_list):
         raise Exception()
