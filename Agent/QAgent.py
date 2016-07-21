@@ -15,7 +15,22 @@ logger.setLevel(logging.DEBUG)
 
 class QAgent(Agent):
     """
-        Human-level control through deep reinforcement learning
+    Human-level control through deep reinforcement learning
+
+    Args:
+        _model (class): necessary, model to create q func,
+                        output's dim should be equal with num of actions
+        _env (Env): necessary, env to learn, should be rewritten from Env
+        _is_train (bool): default True
+        _optimizer (chainer.optimizers): not necessary, if not then func won't be updated
+        _replay (Replay): necessary for training
+        _gpu (bool): whether to use gpu
+        _gamma (float): reward decay
+        _batch_size (int): how much tuples to pull from replay
+        _epsilon (float): init epsilon, p for choosing randomly
+        _epsilon_decay (float): epsilon *= epsilon_decay
+        _epsilon_underline (float): epsilon = max(epsilon_underline, epsilon)
+        _grad_clip (float): clip grad, 0 is no clip
     """
 
     def __init__(self, _model, _env, _is_train=True,
@@ -23,20 +38,17 @@ class QAgent(Agent):
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=1.):
-        """
-        Args:
-            _model (class): model
-        """
 
         super(QAgent, self).__init__()
 
         self.is_train = _is_train
-        # create 
+        # create q func, and to_gpu if use gpu
         self.q_func = QModel(_model())
         if _gpu:
             self.q_func.to_gpu()
         self.env = _env
         if self.is_train:
+            # create target q func, and copy params from q func
             self.target_q_func = QModel(_model())
             if _gpu:
                 self.target_q_func.to_gpu()

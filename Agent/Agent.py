@@ -45,7 +45,7 @@ class Config(object):
 
 class Agent(object):
     """
-    Super class of other agents
+    base class of other agents
     """
 
     def __init__(self):

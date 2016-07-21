@@ -9,6 +9,26 @@ logger.setLevel(logging.DEBUG)
 
 
 class BootQAgent(Agent):
+    """
+    Deep Exploration via Bootstrapped DQN
+
+    Args:
+        _shard (class): necessary, shared part of q func
+        _head (class): necessary, head part of q func
+        _env (Env): necessary, env to learn, should be rewritten from Env
+        _is_train (bool): default True
+        _optimizer (chainer.optimizers): not necessary, if not then func won't be updated
+        _replay (Replay): necessary for training
+        _K (int): how many heads to use
+        _mask_p (float): p to be passed when train for each head
+        _gpu (bool): whether to use gpu
+        _gamma (float): reward decay
+        _batch_size (int): how much tuples to pull from replay
+        _epsilon (float): init epsilon, p for choosing randomly
+        _epsilon_decay (float): epsilon *= epsilon_decay
+        _epsilon_underline (float): epsilon = max(epsilon_underline, epsilon)
+        _grad_clip (float): clip grad, 0 is no clip
+    """
 
     def __init__(self, _shared, _head, _env, _is_train=True,
                  _optimizer=None, _replay=None,
@@ -16,11 +36,7 @@ class BootQAgent(Agent):
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=1.):
-        """
-        Args:
-            _shard (class): shared model
-            _head (class): head model
-        """
+
         super(BootQAgent, self).__init__()
 
         self.is_train = _is_train
@@ -146,6 +162,7 @@ class BootQAgent(Agent):
         for param in self.q_func.shared.params():
             param.grad /= self.config.K
 
+        # avg err
         for i in range(len(err_list)):
             if err_count[i] > 0:
                 err_list[i] /= err_count[i]
