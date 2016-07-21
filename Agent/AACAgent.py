@@ -80,9 +80,9 @@ class AACAgent(Agent):
             cur_value = _cur_output.data[i][0].tolist()
             reward = _batch_tuples[i].reward
             target_value = reward
-            next_value = _next_output.data[i][0].tolist()
             # if not empty position, not terminal state
             if _batch_tuples[i].next_state.in_game:
+                next_value = _next_output.data[i][0].tolist()
                 target_value += self.config.gamma * next_value
             loss = cur_value - target_value
             cross_entropy.data[i] *= -loss
