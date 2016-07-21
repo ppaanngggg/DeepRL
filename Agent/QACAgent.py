@@ -31,9 +31,6 @@ class QACAgent(Agent):
         self.q_func = Critic(_shared(), _critic())
         self.env = _env
         if self.is_train:
-            self.target_q_func = Critic(_shared(), _critic())
-            self.target_q_func.copyparams(self.q_func)
-
             if _actor_optimizer:
                 self.p_opt = _actor_optimizer
                 self.p_opt.setup(self.p_func)
@@ -60,11 +57,11 @@ class QACAgent(Agent):
         cur_output = self.func(self.q_func, _cur_x, True)
         # get cur softmax of actor
         cur_softmax = F.softmax(self.func(self.p_func, _cur_x, True))
-        # get next outputs, target
-        next_output = self.func(self.target_q_func, _next_x, False)
+        # get next outputs
+        next_output = self.func(self.q_func, _next_x, False)
 
         tmp_next_output = self.func(self.p_func, _next_x, False)
-        next_action = self.env.getSoftAction(tmp_next_output.data, _state_list)
+        next_action = self.env.getBestAction(tmp_next_output.data, _state_list)
 
         return cur_output, cur_softmax, next_output, next_action
 
