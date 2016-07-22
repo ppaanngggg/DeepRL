@@ -11,6 +11,28 @@ logger.setLevel(logging.DEBUG)
 
 
 class NStepAACAgent(AACAgent):
+    """
+    Asynchronous Methods for Deep Reinforcement Learning
+
+    Args:
+        _shared (class): necessary, shared part of func
+        _actor (class): necessary, head part of p func,
+                        output's dim should be equal with num of actions
+        _critic (class): necessary, head part of v func,
+                        output's dim should 1
+        _env (Env): necessary, env to learn, should be rewritten from Env
+        _is_train (bool): default True
+        _actor_optimizer (chainer.optimizers): not necessary, opter for actor,
+                                                if not then func won't be updated
+        _critic_optimizer (chainer.optimizers): not necessary, opter for critic,
+                                                if not then func won't be updated
+        _replay (Replay): necessary for training
+        _gpu (bool): whether to use gpu
+        _gamma (float): reward decay
+        _batch_size (int): how much tuples to pull from replay
+        _step_len (int): how much step to do in agent.step()
+        _grad_clip (float): clip grad, 0 is no clip
+    """
 
     def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
                  _actor_optimizer=None, _critic_optimizer=None, _replay=None,

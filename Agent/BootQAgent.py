@@ -1,6 +1,11 @@
 from ..Model import BootQModel
 from Agent import Agent
 import random
+from chainer import cuda
+try:
+    import cupy
+except:
+    pass
 import numpy as np
 
 import logging
@@ -42,15 +47,19 @@ class BootQAgent(Agent):
         self.is_train = _is_train
 
         self.q_func = BootQModel(_shared, _head, _K)
+        if _gpu:
+            self.q_func.to_gpu()
         self.env = _env
         if self.is_train:
             self.target_q_func = BootQModel(_shared, _head, _K)
+            if _gpu:
+                self.target_q_func.to_gpu()
             self.target_q_func.copyparams(self.q_func)
 
             if _optimizer:
                 self.q_opt = _optimizer
                 self.q_opt.setup(self.q_func)
-                self.replay = _replay
+            self.replay = _replay
 
         self.config.K = _K
         self.config.mask_p = _mask_p
@@ -64,6 +73,7 @@ class BootQAgent(Agent):
 
     def startNewGame(self):
         super(BootQAgent, self).startNewGame()
+        # randomly choose head
         self.use_head = random.randint(0, self.config.K - 1)
         logger.info('Use head: ' + str(self.use_head))
 
@@ -152,6 +162,8 @@ class BootQAgent(Agent):
             self.grad(cur_output[k], next_output[k], next_action[k],
                       _batch_tuples, err_list, err_count, k)
             if _weights is not None:
+                if self.config.gpu:
+                    _weights = cuda.to_gpu(_weights)
                 self.gradWeight(cur_output[k], _weights)
             if self.config.grad_clip:
                 self.gradClip(cur_output[k], self.config.grad_clip)
@@ -183,6 +195,7 @@ class BootQAgent(Agent):
                 x_data = self.env.getX(_state)
                 output = self.func(_model, x_data, False)
                 output = output[self.use_head]
+                logger.info(str(output.data))
                 return self.env.getBestAction(output.data, [_state])[0]
         else:
             x_data = self.env.getX(_state)
