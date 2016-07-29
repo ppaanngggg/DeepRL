@@ -1,10 +1,5 @@
 import random
-from chainer import serializers, optimizers, Variable
-from chainer import cuda
-try:
-    import cupy
-except:
-    pass
+import tensorflow as tf
 import numpy as np
 
 import logging
@@ -51,11 +46,25 @@ class Agent(object):
     def __init__(self):
         # alloc all models
         self.v_func = None
+        self.v_vars = None
+        self.v_grads_data = None
+        self.v_grads_place = None
         self.target_v_func = None
+        self.target_v_vars = None
+
         self.q_func = None
+        self.q_vars = None
+        self.q_grads_data = None
+        self.q_grads_place = None
         self.target_q_func = None
+        self.target_q_vars = None
+
         self.p_func = None
+        self.p_vars = None
+        self.p_grads_data = None
+        self.p_grads_place = None
         self.target_p_func = None
+        self.target_p_vars = None
         # alloc all optimizers
         self.v_opt = None
         self.q_opt = None
@@ -116,13 +125,6 @@ class Agent(object):
         """
         train model
         """
-        # clear grads
-        if self.v_func:
-            self.v_func.zerograds()
-        if self.q_func:
-            self.q_func.zerograds()
-        if self.p_func:
-            self.p_func.zerograds()
         # pull tuples from memory pool
         batch_tuples, weights = self.replay.pull(self.config.batch_size)
         if not len(batch_tuples):
@@ -131,18 +133,26 @@ class Agent(object):
         err_list = self.doTrain(batch_tuples, weights)
 
         # if has optimizers, then update model
-        if self.v_opt and self.v_func:
-            self.v_opt.update()
-        if self.q_opt and self.q_func:
-            self.q_opt.update()
-        if self.p_opt and self.p_func:
-            self.p_opt.update()
+        def apply_grads(_opt, _func, _places, _vars, _grads):
+            if _opt is not None and _func is not None \
+                    and _places and _vars and _grads:
+                tmp = {}
+                for p, g in zip(_places, _grads):
+                    tmp[p] = g
+                self.sess.run(_opt, feed_dict=tmp)
+        with tf.device(self.device):
+            apply_grads(self.v_opt, self.v_func, self.v_grads_place,
+                        self.v_vars, self.v_grads_data)
+            apply_grads(self.q_opt, self.q_func, self.q_grads_place,
+                        self.q_vars, self.q_grads_data)
+            apply_grads(self.p_opt, self.p_func, self.p_grads_place,
+                        self.p_vars, self.p_grads_data)
 
         # set err and merge
         self.replay.setErr(batch_tuples, err_list)
         self.replay.merge()
 
-    def doTrain(self, _batch_tuples, _err_list):
+    def doTrain(self, _batch_tuples, _weights):
         """
         do train detail, need to be overwritten
         """
@@ -188,47 +198,29 @@ class Agent(object):
         else:
             _variable.grad = np.clip(_variable.grad, -_value, _value)
 
-    def toGPU(self, _data):
-        """
-        turn input to gpu recursively
-        """
-        if type(_data) is list:
-            return [self.toGPU(d) for d in _data]
-        else:
-            return cuda.to_gpu(_data)
-
-    def toVariable(self, _data):
-        """
-        turn input to Variable recursively
-        """
-        if type(_data) is list:
-            return [self.toVariable(d) for d in _data]
-        else:
-            return Variable(_data)
-
     def func(self, _model, _x_data, _train=True):
         """
         do func use special model with input
         """
-        if self.config.gpu:
-            _x_data = self.toGPU(_x_data)
-        if _train:
-            _model.training()
-        else:
-            _model.evaluating()
-        return _model(self.toVariable(_x_data))
+        with tf.device(self.device):
+            ret = self.sess.run(_model, feed_dict={self.x_place: _x_data})
+        return ret
 
     def updateTargetFunc(self):
         """
         update target if exit
         """
         logger.info('update target func')
-        if self.target_v_func and self.v_func:
-            self.target_v_func.copyparams(self.v_func)
-        if self.target_q_func and self.q_func:
-            self.target_q_func.copyparams(self.q_func)
-        if self.target_p_func and self.p_func:
-            self.target_p_func.copyparams(self.p_func)
+
+        def assign_vars(_s, _d):
+            if _s and _d:
+                for _s_v, _d_v in zip(_s, _d):
+                    self.sess.run(_d_v.assign(_s_v))
+
+        with tf.device(self.device):
+            assign_vars(self.v_vars, self.target_v_vars)
+            assign_vars(self.q_vars, self.target_q_vars)
+            assign_vars(self.p_vars, self.target_p_vars)
 
     def updateEpsilon(self):
         """
@@ -254,23 +246,32 @@ class Agent(object):
                 # use model to choose
                 x_data = self.env.getX(_state)
                 output = self.func(_model, x_data, False)
-                logger.info(str(output.data))
-                return self.env.getBestAction(output.data, [_state])[0]
+                logger.info(str(output))
+                return self.env.getBestAction(output, [_state])[0]
         else:
             x_data = self.env.getX(_state)
             output = self.func(_model, x_data, False)
-            logger.info(str(output.data))
-            return self.env.getBestAction(output.data, [_state])[0]
+            logger.info(str(output))
+            return self.env.getBestAction(output, [_state])[0]
 
     def save(self, _epoch, _step):
         filename = './models/epoch_' + str(_epoch) + '_step_' + str(_step)
         logger.info(filename)
-        if self.v_func:
-            serializers.save_npz(filename + '_v_func', self.v_func)
-        if self.q_func:
-            serializers.save_npz(filename + '_q_func', self.q_func)
-        if self.p_func:
-            serializers.save_npz(filename + '_p_func', self.p_func)
+        if self.v_vars:
+            np.save(
+                filename + '_v_func',
+                [self.sess.run(v) for v in self.v_vars]
+            )
+        if self.q_vars:
+            np.save(
+                filename + '_q_func',
+                [self.sess.run(v) for v in self.q_vars]
+            )
+        if self.p_vars:
+            np.save(
+                filename + '_p_func',
+                [self.sess.run(v) for v in self.p_vars]
+            )
 
     def load(self, filename):
         logger.info(filename)
@@ -281,23 +282,4 @@ class Agent(object):
         if self.p_func:
             serializers.load_npz(filename + '_p_func', self.p_func)
 
-        if self.target_v_func:
-            self.target_v_func.copyparams(self.v_func)
-        if self.target_q_func:
-            self.target_q_func.copyparams(self.q_func)
-        if self.target_p_func:
-            self.target_p_func.copyparams(self.p_func)
-
-    def copyFunc(_agent):
-        if self.v_func and _agent.v_func:
-            self.v_func.copyparams(_agent.v_func)
-        if self.q_func and _agent.q_func:
-            self.q_func.copyparams(_agent.q_func)
-        if self.p_func and _agent.p_func:
-            self.p_func.copyparams(_agent.p_func)
-        if self.target_v_func and _agent.target_v_func:
-            self.target_v_func.copyparams(_agent.target_v_func)
-        if self.target_q_func and _agent.target_q_func:
-            self.target_q_func.copyparams(_agent.target_q_func)
-        if self.target_p_func and _agent.target_p_func:
-            self.target_p_func.copyparams(_agent.target_p_func)
+        self.updateTargetFunc()

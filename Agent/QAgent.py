@@ -1,11 +1,6 @@
-from ..Model import QModel
 from Agent import Agent
 import random
-from chainer import cuda
-try:
-    import cupy
-except:
-    pass
+import tensorflow as tf
 import numpy as np
 
 import logging
@@ -18,7 +13,7 @@ class QAgent(Agent):
     Human-level control through deep reinforcement learning
 
     Args:
-        _model (class): necessary, model to create q func,
+        _model (function): necessary, model to create q func,
                         output's dim should be equal with num of actions
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
@@ -42,22 +37,41 @@ class QAgent(Agent):
         super(QAgent, self).__init__()
 
         self.is_train = _is_train
-        # create q func, and to_gpu if use gpu
-        self.q_func = QModel(_model())
-        if _gpu:
-            self.q_func.to_gpu()
-        self.env = _env
-        if self.is_train:
-            # create target q func, and copy params from q func
-            self.target_q_func = QModel(_model())
-            if _gpu:
-                self.target_q_func.to_gpu()
-            self.target_q_func.copyparams(self.q_func)
+        self.device = '/gpu:0' if _gpu else '/cpu:0'
 
-            if _optimizer:
-                self.q_opt = _optimizer
-                self.q_opt.setup(self.q_func)
-            self.replay = _replay
+        self.env = _env
+
+        with tf.device(self.device):
+            self.sess = tf.Session()    # create q func
+            self.x_place = tf.placeholder(tf.float32)
+            self.q_func, self.q_vars = _model(self.x_place)
+
+            if self.is_train:
+                # create target q func
+                self.target_q_func, self.target_q_vars = _model(self.x_place)
+
+                self.action_place = tf.placeholder(tf.float32)
+                self.target_place = tf.placeholder(tf.float32)
+                action_value = tf.reduce_sum(
+                    self.q_func * self.action_place, 1
+                )
+                self.err_list_op = (action_value - self.target_place) ** 2
+                loss = tf.reduce_mean(self.err_list_op)
+                self.grads_op = tf.gradients(loss, self.q_vars)
+
+                if _optimizer:
+                    self.q_grads_place = [
+                        tf.placeholder(tf.float32) for _ in self.q_vars]
+                    self.q_opt = _optimizer.apply_gradients(
+                        [(p, v)
+                         for p, v in zip(self.q_grads_place, self.q_vars)]
+                    )
+
+                self.replay = _replay
+
+            # copy params from q func to target
+            self.sess.run(tf.initialize_all_variables())
+            self.updateTargetFunc()
 
         self.config.gpu = _gpu
         self.config.gamma = _gamma
@@ -74,59 +88,51 @@ class QAgent(Agent):
         """
         return super(QAgent, self).step(self.q_func)
 
-    def forward(self, _cur_x, _next_x, _state_list):
-        # get cur outputs
-        cur_output = self.func(self.q_func, _cur_x, True)
-        # get next outputs, NOT target
-        next_output = self.func(self.q_func, _next_x, False)
+    def forward(self, _next_x, _state_list):
+        with tf.device(self.device):
+            # get next outputs, NOT target
+            next_output = self.func(self.q_func, _next_x, False)
+            # only one head
+            next_action = self.env.getBestAction(next_output, _state_list)
+            # get next outputs, target
+            next_output = self.func(self.target_q_func, _next_x, False)
 
-        # only one head
-        next_action = self.env.getBestAction(next_output.data, _state_list)
+        return next_output, next_action
 
-        # get next outputs, target
-        next_output = self.func(self.target_q_func, _next_x, False)
-        return cur_output, next_output, next_action
+    def grad(self, _cur_x, _next_output, _next_action, _batch_tuples):
+        with tf.device(self.device):
+            # get action data and target data
+            action_data = np.zeros_like(_next_output)
+            for i in range(len(_batch_tuples)):
+                action_data[i, _batch_tuples[i].action] = 1.
+            target_data = np.zeros((len(_batch_tuples)), np.float32)
+            for i in range(len(_batch_tuples)):
+                target_value = _batch_tuples[i].reward
+                # if not empty position, not terminal state
+                if _batch_tuples[i].next_state.in_game:
+                    next_action_value = \
+                        _next_output[i][_next_action[i]].tolist()
+                    target_value += self.config.gamma * next_action_value
+            ret = self.sess.run(
+                [self.err_list_op] + self.grads_op,
+                feed_dict={
+                    self.x_place: _cur_x,
+                    self.action_place: action_data,
+                    self.target_place: target_data
+                }
+            )
+            self.q_grads_data = ret[1:]
 
-    def grad(self, _cur_output, _next_output, _next_action, _batch_tuples):
-        # alloc
-        if self.config.gpu:
-            _cur_output.grad = cupy.zeros_like(_cur_output.data)
-        else:
-            _cur_output.grad = np.zeros_like(_cur_output.data)
-
-        # compute grad from each tuples
-        err_list = []
-        for i in range(len(_batch_tuples)):
-            cur_action_value = \
-                _cur_output.data[i][_batch_tuples[i].action].tolist()
-            reward = _batch_tuples[i].reward
-            target_value = reward
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                next_action_value = \
-                    _next_output.data[i][_next_action[i]].tolist()
-                target_value += self.config.gamma * next_action_value
-            loss = cur_action_value - target_value
-            _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
-            err_list.append(abs(loss))
-        return err_list
+        return ret[0]
 
     def doTrain(self, _batch_tuples, _weights):
         # get inputs from batch
         cur_x = self.getCurInputs(_batch_tuples)
         next_x = self.getNextInputs(_batch_tuples)
         # compute forward
-        cur_output, next_output, next_action = self.forward(
-            cur_x, next_x, [t.next_state for t in _batch_tuples])
+        next_output, next_action = self.forward(
+            next_x, [t.next_state for t in _batch_tuples])
         # fill grad
-        err_list = self.grad(cur_output, next_output,
+        err_list = self.grad(cur_x, next_output,
                              next_action, _batch_tuples)
-        if _weights is not None:
-            if self.config.gpu:
-                _weights = cuda.to_gpu(_weights)
-            self.gradWeight(cur_output, _weights)
-        if self.config.grad_clip:
-            self.gradClip(cur_output, self.config.grad_clip)
-        # backward
-        cur_output.backward()
         return err_list
