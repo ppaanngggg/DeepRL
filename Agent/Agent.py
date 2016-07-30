@@ -36,6 +36,8 @@ class Config(object):
         self.eta = None
         # for N step
         self.step_len = None
+        # beta of entropy
+        self.beta_entropy = None
 
 
 class Agent(object):

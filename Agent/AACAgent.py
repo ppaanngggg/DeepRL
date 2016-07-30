@@ -32,7 +32,7 @@ class AACAgent(Agent):
 
     def __init__(self, _actor, _critic, _env, _is_train=True,
                  _actor_optimizer=None, _critic_optimizer=None, _replay=None,
-                 _gpu=False, _gamma=0.99, _batch_size=32,
+                 _gpu=False, _gamma=0.99, _batch_size=32, _beta_entropy=0.01,
                  _grad_clip=1.):
 
         super(AACAgent, self).__init__(_is_train, _gpu)
@@ -74,7 +74,7 @@ class AACAgent(Agent):
                         tf.reduce_sum(self.softmax_op *
                                       self.action_place, 1) + 1e-10
                     ) * self.diff_place
-                ) + 0.01 * entropy
+                ) + _beta_entropy * entropy
                 # compute grads of vars
                 self.actor_grads_op = tf.gradients(loss, self.p_vars)
 
@@ -105,6 +105,7 @@ class AACAgent(Agent):
         self.config.gpu = _gpu
         self.config.gamma = _gamma
         self.config.batch_size = _batch_size
+        self.config.beta_entropy = _beta_entropy
         self.config.grad_clip = _grad_clip
 
     def step(self):
