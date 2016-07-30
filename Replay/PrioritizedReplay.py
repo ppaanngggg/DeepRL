@@ -73,7 +73,6 @@ class PrioritizedReplay(object):
             weights *= self.getPoolSize()
         weights = weights ** -self.beta
         weights /= weights.max()
-        weights = np.expand_dims(weights, 1)
         # update beta
         self.beta = min(1, self.beta + self.beta_add)
 

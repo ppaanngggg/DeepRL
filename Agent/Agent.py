@@ -17,7 +17,7 @@ class Config(object):
         Alloc all configs
         """
         # whether to use gpu
-        self.gpu = None
+        self.device = None
         # gamma, decay param of reward
         self.gamma = None
         # batch size of train
@@ -43,7 +43,9 @@ class Agent(object):
     base class of other agents
     """
 
-    def __init__(self):
+    def __init__(self, _is_train, _gpu):
+        self.sess = tf.Session()
+
         # alloc all models
         self.v_func = None
         self.v_vars = None
@@ -65,6 +67,7 @@ class Agent(object):
         self.p_grads_place = None
         self.target_p_func = None
         self.target_p_vars = None
+
         # alloc all optimizers
         self.v_opt = None
         self.q_opt = None
@@ -72,7 +75,16 @@ class Agent(object):
 
         self.env = None
 
+        # is train
+        self.is_train = _is_train
+
+        # set config, and set device
         self.config = Config()
+        self.config.device = '/gpu:0' if _gpu else '/cpu:0'
+
+        # set place for x
+        with tf.device(self.config.device):
+            self.x_place = tf.placeholder(tf.float32)
 
     def training(self):
         """
@@ -140,7 +152,7 @@ class Agent(object):
                 for p, g in zip(_places, _grads):
                     tmp[p] = g
                 self.sess.run(_opt, feed_dict=tmp)
-        with tf.device(self.device):
+        with tf.device(self.config.device):
             apply_grads(self.v_opt, self.v_func, self.v_grads_place,
                         self.v_vars, self.v_grads_data)
             apply_grads(self.q_opt, self.q_func, self.q_grads_place,
@@ -202,7 +214,7 @@ class Agent(object):
         """
         do func use special model with input
         """
-        with tf.device(self.device):
+        with tf.device(self.config.device):
             ret = self.sess.run(_model, feed_dict={self.x_place: _x_data})
         return ret
 
@@ -217,7 +229,7 @@ class Agent(object):
                 for _s_v, _d_v in zip(_s, _d):
                     self.sess.run(_d_v.assign(_s_v))
 
-        with tf.device(self.device):
+        with tf.device(self.config.device):
             assign_vars(self.v_vars, self.target_v_vars)
             assign_vars(self.q_vars, self.target_q_vars)
             assign_vars(self.p_vars, self.target_p_vars)
@@ -275,11 +287,17 @@ class Agent(object):
 
     def load(self, filename):
         logger.info(filename)
-        if self.v_func:
-            serializers.load_npz(filename + '_v_func', self.v_func)
-        if self.q_func:
-            serializers.load_npz(filename + '_q_func', self.q_func)
-        if self.p_func:
-            serializers.load_npz(filename + '_p_func', self.p_func)
+        if self.v_vars:
+            with tf.device(self.config.device):
+                for d, v in zip(np.load(filename + '_v_func.npy'), self.v_vars):
+                    self.sess.run(v.assign(d))
+        if self.q_vars:
+            with tf.device(self.config.device):
+                for d, v in zip(np.load(filename + '_q_func.npy'), self.q_vars):
+                    self.sess.run(v.assign(d))
+        if self.p_vars:
+            with tf.device(self.config.device):
+                for d, v in zip(np.load(filename + '_p_func.npy'), self.p_vars):
+                    self.sess.run(v.assign(d))
 
         self.updateTargetFunc()
