@@ -46,7 +46,7 @@ class QAgent(Agent):
             if self.is_train:
                 # create target q func
                 self.target_q_func, self.target_q_vars = _model(self.x_place)
-                # place for action(one hot), target
+                # place for action(one hot), target, weight
                 self.action_place = tf.placeholder(tf.float32)
                 self.target_place = tf.placeholder(tf.float32)
                 self.weight_place = tf.placeholder(tf.float32)
@@ -55,7 +55,8 @@ class QAgent(Agent):
                     self.q_func * self.action_place, 1
                 )
                 # get err of cur action value and target value
-                self.err_list_op = (action_value - self.target_place) ** 2
+                self.err_list_op = 0.5 * \
+                    tf.square(action_value - self.target_place)
                 # get total loss, mul with weight, if weight exist
                 loss = tf.reduce_mean(self.err_list_op * self.weight_place)
                 # compute grads of vars
@@ -115,9 +116,8 @@ class QAgent(Agent):
                 target_value = _batch_tuples[i].reward
                 # if not empty position, not terminal state
                 if _batch_tuples[i].next_state.in_game:
-                    next_action_value = \
-                        _next_output[i][_next_action[i]].tolist()
-                    target_value += self.config.gamma * next_action_value
+                    target_value += self.config.gamma * \
+                        _next_output[i][_next_action[i]]
                 target_data[i] = target_value
             # get weight data
             if _weights is not None:

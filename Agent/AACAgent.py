@@ -1,8 +1,6 @@
-from ..Model.ACModel import Actor, Critic
 from Agent import Agent
 import random
-from chainer import serializers, Variable
-import chainer.functions as F
+import tensorflow as tf
 import numpy as np
 
 import logging
@@ -15,10 +13,9 @@ class AACAgent(Agent):
     Asynchronous Methods for Deep Reinforcement Learning
 
     Args:
-        _shared (class): necessary, shared part of func
-        _actor (class): necessary, head part of p func,
+        _actor (function): necessary, head part of p func,
                         output's dim should be equal with num of actions
-        _critic (class): necessary, head part of v func,
+        _critic (function): necessary, head part of v func,
                         output's dim should 1
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
@@ -33,27 +30,77 @@ class AACAgent(Agent):
         _grad_clip (float): clip grad, 0 is no clip
     """
 
-    def __init__(self, _shared, _actor, _critic, _env, _is_train=True,
+    def __init__(self, _actor, _critic, _env, _is_train=True,
                  _actor_optimizer=None, _critic_optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _grad_clip=1.):
 
-        super(AACAgent, self).__init__()
+        super(AACAgent, self).__init__(_is_train, _gpu)
 
-        self.is_train = _is_train
-
-        self.p_func = Actor(_shared(), _actor())
-        self.v_func = Critic(_shared(), _critic())
+        # set env
         self.env = _env
-        if self.is_train:
-            if _actor_optimizer:
-                self.p_opt = _actor_optimizer
-                self.p_opt.setup(self.p_func)
-            if _critic_optimizer:
-                self.v_opt = _critic_optimizer
-                self.v_opt.setup(self.v_func)
 
-            self.replay = _replay
+        with tf.device(self.config.device):
+            # create p func
+            self.p_func, self.p_vars = _actor(self.x_place)
+            # get softmax of p func
+            self.softmax_op = tf.nn.softmax(self.p_func)
+            self.v_func, self.v_vars = _critic(self.x_place)
+
+            if self.is_train:
+                # critic part :
+                # place for target, weight
+                self.target_place = tf.placeholder(tf.float32)
+                self.weight_place = tf.placeholder(tf.float32)
+                # get diff of target and v
+                self.diff_op = self.target_place - \
+                    tf.reshape(self.v_func, [-1])
+                # get err of value and target
+                self.err_list_op = 0.5 * tf.square(self.diff_op)
+                # get total loss, mul with weight, if weight exist
+                loss = tf.reduce_mean(self.err_list_op * self.weight_place)
+                # compute grads of vars
+                self.critic_grads_op = tf.gradients(loss, self.v_vars)
+
+                # actor part :
+                # place for action, diff
+                self.action_place = tf.placeholder(tf.float32)
+                self.diff_place = tf.placeholder(tf.float32)
+                # get entropy
+                entropy = - tf.reduce_sum(
+                    self.softmax_op * tf.log(self.softmax_op + 1e-10))
+                loss = tf.reduce_sum(
+                    -tf.log(
+                        tf.reduce_sum(self.softmax_op *
+                                      self.action_place, 1) + 1e-10
+                    ) * self.diff_place
+                ) + 0.01 * entropy
+                # compute grads of vars
+                self.actor_grads_op = tf.gradients(loss, self.p_vars)
+
+                if _actor_optimizer:
+                    self.p_grads_place = [
+                        tf.placeholder(tf.float32) for _ in self.p_vars
+                    ]
+                    self.p_opt = _actor_optimizer.apply_gradients([
+                        (p, v) for p, v in zip(
+                            self.p_grads_place, self.p_vars)
+                    ])
+                if _critic_optimizer:
+                    self.v_grads_place = [
+                        tf.placeholder(tf.float32) for _ in self.v_vars
+                    ]
+                    self.v_opt = _critic_optimizer.apply_gradients([
+                        (p, v) for p, v in zip(
+                            self.v_grads_place, self.v_vars)
+                    ])
+
+                self.replay = _replay
+
+            # init all vars
+            self.sess.run(tf.initialize_all_variables())
+            # copy params from q func to target
+            self.updateTargetFunc()
 
         self.config.gpu = _gpu
         self.config.gamma = _gamma
@@ -65,72 +112,78 @@ class AACAgent(Agent):
         Returns:
             still in game or not
         """
-        return super(AACAgent, self).step(self.p_func)
+        return super(AACAgent, self).step(self.softmax_op)
 
-    def forward(self, _cur_x, _next_x):
-        # get cur outputs
-        cur_output = self.func(self.v_func, _cur_x, True)
-        # get cur softmax of actor
-        cur_softmax = F.softmax(self.func(self.p_func, _cur_x, True))
-        # get next outputs, target
-        next_output = self.func(self.v_func, _next_x, False)
-        return cur_output, cur_softmax, next_output
+    def forward(self, _next_x):
+        with tf.device(self.config.device):
+            # get next outputs, target
+            next_output = self.func(self.v_func, _next_x, False)
+        return next_output
 
-    def grad(self, _cur_output, _cur_softmax, _next_output, _batch_tuples):
-        # alloc
-        if self.config.gpu:
-            _cur_output.grad = cupy.zeros_like(_cur_output.data)
-        else:
-            _cur_output.grad = np.zeros_like(_cur_output.data)
+    def grad(self, _cur_x, _next_output, _batch_tuples, _weights):
+        with tf.device(self.config.device):
+            # critic part
+            # get target data
+            target_data = np.zeros((len(_batch_tuples)), np.float32)
+            for i in range(len(_batch_tuples)):
+                target_value = _batch_tuples[i].reward
+                # if not empty position, not terminal state
+                if _batch_tuples[i].next_state.in_game:
+                    target_value += self.config.gamma * _next_output[i][0]
+                target_data[i] = target_value
+            # get weight data
+            if _weights is not None:
+                weigth_data = _weights
+            else:
+                weigth_data = np.ones((len(_batch_tuples)), np.float32)
+            # get diff [0], err list [1] and grads [2:]
+            ret = self.sess.run(
+                [self.diff_op, self.err_list_op] + self.critic_grads_op,
+                feed_dict={
+                    self.x_place: _cur_x,
+                    self.target_place: target_data,
+                    self.weight_place: weigth_data,
+                }
+            )
+            diff_data = ret[0]
+            err_list = ret[1]
+            # set v grads data
+            self.v_grads_data = ret[2:]
 
-        cur_action = np.zeros_like(_cur_softmax.data)
-        for i in range(len(_batch_tuples)):
-            cur_action[i][_batch_tuples[i].action] = 1
-        cross_entropy = F.batch_matmul(_cur_softmax, Variable(cur_action),
-                                       transa=True)
-        cross_entropy = -F.log(cross_entropy)
-        # compute grad from each tuples
-        err_list = []
-        for i in range(len(_batch_tuples)):
-            cur_value = _cur_output.data[i][0].tolist()
-            reward = _batch_tuples[i].reward
-            target_value = reward
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                next_value = _next_output.data[i][0].tolist()
-                target_value += self.config.gamma * next_value
-            loss = cur_value - target_value
-            cross_entropy.data[i] *= -loss
-            _cur_output.grad[i][0] = 2 * loss
-            err_list.append(abs(loss))
-
-        cross_entropy.grad = np.copy(cross_entropy.data)
-        return err_list, cross_entropy
+            # get action data (one hot)
+            action_data = np.zeros((len(_batch_tuples),
+                                    self.softmax_op.get_shape().as_list()[1]),
+                                   np.float32)
+            for i in range(len(_batch_tuples)):
+                action_data[i, _batch_tuples[i].action] = 1.
+            # set p grad data
+            self.p_grads_data = self.sess.run(
+                self.actor_grads_op,
+                feed_dict={
+                    self.x_place: _cur_x,
+                    self.action_place: action_data,
+                    self.diff_place: diff_data,
+                }
+            )
+        # return err_list
+        return err_list
 
     def doTrain(self, _batch_tuples, _weights):
         # get inputs from batch
         cur_x = self.getCurInputs(_batch_tuples)
         next_x = self.getNextInputs(_batch_tuples)
         # compute forward
-        cur_output, cur_softmax, next_output = self.forward(cur_x, next_x)
+        next_output = self.forward(next_x)
         # fill grad
-        err_list, cross_entropy = self.grad(
-            cur_output, cur_softmax, next_output, _batch_tuples)
-        if _weights is not None:
-            self.gradWeight(cur_output, _weights)
-        if self.config.grad_clip:
-            self.gradClip(cur_output, self.config.grad_clip)
-        # backward
-        cur_output.backward()
-        cross_entropy.backward()
+        err_list = self.grad(cur_x, next_output, _batch_tuples, _weights)
 
         return err_list
 
     def chooseAction(self, _model, _state):
         x_data = self.env.getX(_state)
         output = self.func(_model, x_data, False)
-        logger.info(str(F.softmax(output).data))
+        logger.info(output)
         if self.is_train:
-            return self.env.getSoftAction(output.data, [_state])[0]
+            return self.env.getSoftAction(output, [_state])[0]
         else:
-            return self.env.getBestAction(output.data, [_state])[0]
+            return self.env.getBestAction(output, [_state])[0]

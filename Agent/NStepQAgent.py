@@ -1,11 +1,6 @@
-from ..Model import QModel
 from QAgent import QAgent
 import random
-from chainer import cuda
-try:
-    import cupy
-except:
-    pass
+import tensorflow as tf
 import numpy as np
 
 import logging
@@ -18,7 +13,7 @@ class NStepQAgent(QAgent):
     Asynchronous Methods for Deep Reinforcement Learning
 
     Args:
-        _model (class): necessary, model to create q func,
+        _model (function): necessary, model to create q func,
                         output's dim should be equal with num of actions
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
@@ -56,11 +51,11 @@ class NStepQAgent(QAgent):
         if self.is_train:
             if not self.env.in_game:
                 return False
-
+            # buffer
             state_list = []
             action_list = []
             reward_list = []
-
+            # get cur state
             cur_state = self.env.getState()
             for _ in range(self.config.step_len):
                 state_list.append(cur_state)
@@ -82,28 +77,40 @@ class NStepQAgent(QAgent):
         else:
             return super(NStepQAgent, self).step()
 
-    def grad(self, _cur_output, _next_output, _next_action, _batch_tuples):
-        # alloc
-        if self.config.gpu:
-            _cur_output.grad = cupy.zeros_like(_cur_output.data)
-        else:
-            _cur_output.grad = np.zeros_like(_cur_output.data)
+    def grad(self, _cur_x, _next_output, _next_action, _batch_tuples, _weights):
+        with tf.device(self.config.device):
+            # get action data (one hot)
+            action_data = np.zeros_like(_next_output)
+            for i in range(len(_batch_tuples)):
+                action_data[i, _batch_tuples[i].action] = 1.
+            # get target data
+            target_data = np.zeros((len(_batch_tuples)), np.float32)
+            for i in range(len(_batch_tuples)):
+                reward = _batch_tuples[i].reward
+                target_value = 0.
+                # if not empty position, not terminal state
+                if _batch_tuples[i].next_state.in_game:
+                    target_value += _next_output[i][_next_action[i]].tolist()
+                for r in reversed(reward):
+                    target_value = r + self.config.gamma * target_value
+                target_data[i] = target_value
+            # get weight data
+            if _weights is not None:
+                weigth_data = _weights
+            else:
+                weigth_data = np.ones((len(_batch_tuples)), np.float32)
 
-        # compute grad from each tuples
-        err_list = []
-        for i in range(len(_batch_tuples)):
-            cur_action_value = \
-                _cur_output.data[i][_batch_tuples[i].action].tolist()
-            reward = _batch_tuples[i].reward
-            target_value = 0.
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                next_action_value = \
-                    _next_output.data[i][_next_action[i]].tolist()
-                target_value = next_action_value
-            for r in reversed(reward):
-                target_value = r + self.config.gamma * target_value
-            loss = cur_action_value - target_value
-            _cur_output.grad[i][_batch_tuples[i].action] = 2 * loss
-            err_list.append(abs(loss))
-        return err_list
+            # get err list [0] and grads [1:]
+            ret = self.sess.run(
+                [self.err_list_op] + self.grads_op,
+                feed_dict={
+                    self.x_place: _cur_x,
+                    self.action_place: action_data,
+                    self.target_place: target_data,
+                    self.weight_place: weigth_data,
+                }
+            )
+            # set grads data
+            self.q_grads_data = ret[1:]
+        # return err_list
+        return ret[0]
