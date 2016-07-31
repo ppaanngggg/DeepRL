@@ -69,10 +69,11 @@ class AACAgent(Agent):
                 # get entropy
                 entropy = - tf.reduce_sum(
                     self.softmax_op * tf.log(self.softmax_op + 1e-10))
+                # get loss
                 loss = tf.reduce_sum(
                     -tf.log(
-                        tf.reduce_sum(self.softmax_op *
-                                      self.action_place, 1) + 1e-10
+                        tf.reduce_sum(self.softmax_op * self.action_place, 1)
+                        + 1e-10
                     ) * self.diff_place
                 ) + _beta_entropy * entropy
                 # compute grads of vars
@@ -125,25 +126,16 @@ class AACAgent(Agent):
         with tf.device(self.config.device):
             # critic part
             # get target data
-            target_data = np.zeros((len(_batch_tuples)), np.float32)
-            for i in range(len(_batch_tuples)):
-                target_value = _batch_tuples[i].reward
-                # if not empty position, not terminal state
-                if _batch_tuples[i].next_state.in_game:
-                    target_value += self.config.gamma * _next_output[i][0]
-                target_data[i] = target_value
+            target_data = self.getVTargetData(_next_output, _batch_tuples)
             # get weight data
-            if _weights is not None:
-                weigth_data = _weights
-            else:
-                weigth_data = np.ones((len(_batch_tuples)), np.float32)
+            weight_data = self.getWeightData(_weights, _batch_tuples)
             # get diff [0], err list [1] and grads [2:]
             ret = self.sess.run(
                 [self.diff_op, self.err_list_op] + self.critic_grads_op,
                 feed_dict={
                     self.x_place: _cur_x,
                     self.target_place: target_data,
-                    self.weight_place: weigth_data,
+                    self.weight_place: weight_data,
                 }
             )
             diff_data = ret[0]
@@ -151,12 +143,10 @@ class AACAgent(Agent):
             # set v grads data
             self.v_grads_data = ret[2:]
 
+            # actor part
             # get action data (one hot)
-            action_data = np.zeros((len(_batch_tuples),
-                                    self.softmax_op.get_shape().as_list()[1]),
-                                   np.float32)
-            for i in range(len(_batch_tuples)):
-                action_data[i, _batch_tuples[i].action] = 1.
+            action_data = self.getActionData(
+                self.softmax_op.get_shape().as_list()[1], _batch_tuples)
             # set p grad data
             self.p_grads_data = self.sess.run(
                 self.actor_grads_op,

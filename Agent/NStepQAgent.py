@@ -48,57 +48,18 @@ class NStepQAgent(QAgent):
         Returns:
             still in game or not
         """
-        if self.is_train:
-            if not self.env.in_game:
-                return False
-            # buffer
-            state_list = []
-            action_list = []
-            reward_list = []
-            # get cur state
-            cur_state = self.env.getState()
-            for _ in range(self.config.step_len):
-                state_list.append(cur_state)
-                action = self.chooseAction(self.q_func, cur_state)
-                action_list.append(action)
-                reward = self.env.doAction(action)
-                reward_list.append(reward)
-                logger.info('Action: ' + str(action) +
-                            '; Reward: %.3f' % (reward))
-                next_state = self.env.getState()
-                if not self.env.in_game:
-                    break
-                cur_state = next_state
-
-            for i in range(len(state_list)):
-                self.replay.push(state_list[i], action_list[i],
-                                 reward_list[i:], next_state)
-            return self.env.in_game
-        else:
-            return super(NStepQAgent, self).step()
+        return super(NStepQAgent, self).nstep(self.q_func)
 
     def grad(self, _cur_x, _next_output, _next_action, _batch_tuples, _weights):
         with tf.device(self.config.device):
             # get action data (one hot)
-            action_data = np.zeros_like(_next_output)
-            for i in range(len(_batch_tuples)):
-                action_data[i, _batch_tuples[i].action] = 1.
+            action_data = self.getActionData(
+                self.q_func.get_shape().as_list()[1], _batch_tuples)
             # get target data
-            target_data = np.zeros((len(_batch_tuples)), np.float32)
-            for i in range(len(_batch_tuples)):
-                reward = _batch_tuples[i].reward
-                target_value = 0.
-                # if not empty position, not terminal state
-                if _batch_tuples[i].next_state.in_game:
-                    target_value += _next_output[i][_next_action[i]].tolist()
-                for r in reversed(reward):
-                    target_value = r + self.config.gamma * target_value
-                target_data[i] = target_value
+            target_data = self.getNStepQTargetData(
+                _next_output, _next_action, _batch_tuples)
             # get weight data
-            if _weights is not None:
-                weigth_data = _weights
-            else:
-                weigth_data = np.ones((len(_batch_tuples)), np.float32)
+            weight_data = self.getWeightData(_weights, _batch_tuples)
 
             # get err list [0] and grads [1:]
             ret = self.sess.run(
@@ -107,7 +68,7 @@ class NStepQAgent(QAgent):
                     self.x_place: _cur_x,
                     self.action_place: action_data,
                     self.target_place: target_data,
-                    self.weight_place: weigth_data,
+                    self.weight_place: weight_data,
                 }
             )
             # set grads data

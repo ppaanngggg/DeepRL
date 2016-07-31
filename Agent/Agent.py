@@ -135,6 +135,40 @@ class Agent(object):
 
         return self.env.in_game
 
+    def nstep(self, _model):
+        """
+        Returns:
+            still in game or not
+        """
+        if self.is_train:
+            if not self.env.in_game:
+                return False
+
+            state_list = []
+            action_list = []
+            reward_list = []
+
+            cur_state = self.env.getState()
+            for _ in range(self.config.step_len):
+                state_list.append(cur_state)
+                action = self.chooseAction(_model, cur_state)
+                action_list.append(action)
+                reward = self.env.doAction(action)
+                reward_list.append(reward)
+                logger.info(
+                    'Action: ' + str(action) + '; Reward: %.3f' % (reward))
+                next_state = self.env.getState()
+                if not self.env.in_game:
+                    break
+                cur_state = next_state
+
+            for i in range(len(state_list)):
+                self.replay.push(
+                    state_list[i], action_list[i], reward_list[i:], next_state)
+            return self.env.in_game
+        else:
+            return self.step(_model)
+
     def train(self):
         """
         train model
@@ -192,25 +226,64 @@ class Agent(object):
         next_x = np.concatenate(next_x, 0)
         return next_x
 
-    def gradWeight(self, _variable, _weights):
-        """
-        multiply grad with weights
-        """
-        # multiply weights with grad
-        if self.config.gpu:
-            _variable.grad = cupy.multiply(_variable.grad, _weights)
-        else:
-            _variable.grad = np.multiply(_variable.grad, _weights)
+    def getActionData(self, _action_space, _batch_tuples):
+        action_data = np.zeros((len(_batch_tuples), _action_space))
+        for i in range(len(_batch_tuples)):
+            action_data[i, _batch_tuples[i].action] = 1.
+        return action_data
 
-    def gradClip(self, _variable, _value=1):
-        """
-        clip grad with limit
-        """
-        # clip grads
-        if self.config.gpu:
-            _variable.grad = cupy.clip(_variable.grad, -_value, _value)
+    def getQTargetData(self, _next_output, _next_action, _batch_tuples):
+        target_data = np.zeros((len(_batch_tuples)), np.float32)
+        for i in range(len(_batch_tuples)):
+            target_value = _batch_tuples[i].reward
+            # if not empty position, not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                target_value += self.config.gamma * \
+                    _next_output[i][_next_action[i]]
+            target_data[i] = target_value
+        return target_data
+
+    def getNStepQTargetData(self, _next_output, _next_action, _batch_tuples):
+        target_data = np.zeros((len(_batch_tuples)), np.float32)
+        for i in range(len(_batch_tuples)):
+            reward = _batch_tuples[i].reward
+            target_value = 0.
+            # if not empty position, not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                target_value += _next_output[i][_next_action[i]]
+            for r in reversed(reward):
+                target_value = r + self.config.gamma * target_value
+            target_data[i] = target_value
+        return target_data
+
+    def getVTargetData(self, _next_output, _batch_tuples):
+        target_data = np.zeros((len(_batch_tuples)), np.float32)
+        for i in range(len(_batch_tuples)):
+            target_value = _batch_tuples[i].reward
+            # if not empty position, not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                target_value += self.config.gamma * _next_output[i][0]
+            target_data[i] = target_value
+        return target_data
+
+    def getNStepVTargetData(self, _next_output, _batch_tuples):
+        target_data = np.zeros((len(_batch_tuples)), np.float32)
+        for i in range(len(_batch_tuples)):
+            reward = _batch_tuples[i].reward
+            target_value = 0.
+            # if not empty position, not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                target_value += _next_output[i][0]
+            for r in reversed(reward):
+                target_value = r + self.config.gamma * target_value
+            target_data[i] = target_value
+        return target_data
+
+    def getWeightData(self, _weights, _batch_tuples):
+        if _weights is not None:
+            return _weights
         else:
-            _variable.grad = np.clip(_variable.grad, -_value, _value)
+            return np.ones((len(_batch_tuples)), np.float32)
 
     def func(self, _model, _x_data, _train=True):
         """
