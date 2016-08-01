@@ -2,7 +2,8 @@ from multiprocessing import Process, Queue, Lock
 import random
 import sys
 from select import select
-from chainer import cuda
+import tensorflow as tf
+from time import time
 
 
 def func_train_process(_create_agent_func,
@@ -11,38 +12,44 @@ def func_train_process(_create_agent_func,
     random.seed()
     agent = _create_agent_func()
 
-    def set_params(_func, _params):
-        for param, data in zip(_func.params(), _params):
-            param.data = data
+    def set_params(_vars, _params):
+        with tf.device(agent.config.device):
+            agent.sess.run([
+                v.assign(p) for v, p in zip(_vars, _params)
+            ])
 
     def update_params():
         _c2s_queue.put('params')
         fetch_data = _s2c_queue.get()
         for k, v in zip(fetch_data.keys(), fetch_data.values()):
             if k == 'v_func':
-                set_params(agent.v_func, v)
-            if k == 'q_func':
-                set_params(agent.q_func, v)
-            if k == 'p_func':
-                set_params(agent.p_func, v)
-            if k == 'target_v_func':
-                set_params(agent.target_v_func, v)
-            if k == 'target_q_func':
-                set_params(agent.target_q_func, v)
-            if k == 'target_p_func':
-                set_params(agent.target_p_func, v)
+                set_params(agent.v_vars, v)
+            elif k == 'q_func':
+                set_params(agent.q_vars, v)
+            elif k == 'p_func':
+                set_params(agent.p_vars, v)
+            elif k == 'target_v_func':
+                set_params(agent.target_v_vars, v)
+            elif k == 'target_q_func':
+                start_time = time()
+                set_params(agent.target_q_vars, v)
+                print 'update_params time', time() - start_time
+            elif k == 'target_p_func':
+                set_params(agent.target_p_vars, v)
+            else:
+                raise Exception()
 
     def upload_grads_update_params():
         _lock.acquire()
         _c2s_queue.put('grads')
         _s2c_queue.get()
         push_data = {}
-        if agent.v_func:
-            push_data['v_func'] = [d.grad for d in agent.v_func.params()]
-        if agent.q_func:
-            push_data['q_func'] = [d.grad for d in agent.q_func.params()]
-        if agent.p_func:
-            push_data['p_func'] = [d.grad for d in agent.p_func.params()]
+        if agent.v_vars:
+            push_data['v_func'] = agent.v_grads_data
+        if agent.q_vars:
+            push_data['q_func'] = agent.q_grads_data
+        if agent.p_vars:
+            push_data['p_func'] = agent.p_grads_data
         _c2s_queue.put(push_data)
         _s2c_queue.get()
         update_params()
@@ -91,22 +98,6 @@ class AsynTrain(object):
             process.start()
 
         self.agent = _create_agent_func()
-        self.v_func = self.agent.v_func
-        self.q_func = self.agent.q_func
-        self.p_func = self.agent.p_func
-        self.target_v_func = self.agent.target_v_func
-        self.target_q_func = self.agent.target_q_func
-        self.target_p_func = self.agent.target_p_func
-
-        self.v_opt = _v_opt
-        self.q_opt = _q_opt
-        self.p_opt = _p_opt
-        if _v_opt and self.v_func:
-            self.v_opt.setup(self.v_func)
-        if _q_opt and self.q_func:
-            self.q_opt.setup(self.q_func)
-        if _p_opt and self.p_func:
-            self.p_opt.setup(self.p_func)
 
         self.step_total = 0
         self.step_update_target = _step_update_target
@@ -116,52 +107,50 @@ class AsynTrain(object):
         while True:
             fetch_data = self.c2s_queue.get()
             if fetch_data == 'step':
+                # receive a step info, inc step_total
                 self.step_total += 1
                 if self.step_total % self.step_update_target == 0:
+                    # if update target
                     self.agent.updateTargetFunc()
                 if self.step_total % self.step_save == 0:
+                    # if save model
                     self.agent.save("", self.step_total)
                 self.s2c_queue.put('ack')
             elif fetch_data == 'params':
+                # request params
                 push_data = {}
-                if self.v_func:
-                    push_data['v_func'] = [
-                        d.data for d in self.v_func.params()]
-                if self.q_func:
-                    push_data['q_func'] = [
-                        d.data for d in self.q_func.params()]
-                if self.p_func:
-                    push_data['p_func'] = [
-                        d.data for d in self.p_func.params()]
-                if self.target_v_func:
-                    push_data['target_v_func'] = [
-                        d.data for d in self.target_v_func.params()]
-                if self.target_q_func:
-                    push_data['target_q_func'] = [
-                        d.data for d in self.target_q_func.params()]
-                if self.target_p_func:
-                    push_data['target_p_func'] = [
-                        d.data for d in self.target_p_func.params()]
+
+                def get_vars_params(_vars):
+                    return self.agent.sess.run(_vars)
+
+                if self.agent.v_vars:
+                    push_data['v_func'] = get_vars_params(self.agent.v_vars)
+                if self.agent.q_vars:
+                    push_data['q_func'] = get_vars_params(self.agent.q_vars)
+                if self.agent.p_vars:
+                    push_data['p_func'] = get_vars_params(self.agent.p_vars)
+                if self.agent.target_v_vars:
+                    push_data['target_v_func'] = get_vars_params(
+                        self.agent.target_v_vars)
+                if self.agent.target_q_vars:
+                    push_data['target_q_func'] = get_vars_params(
+                        self.agent.target_q_vars)
+                if self.agent.target_p_vars:
+                    push_data['target_p_func'] = get_vars_params(
+                        self.agent.target_p_vars)
                 self.s2c_queue.put(push_data)
             elif fetch_data == 'grads':
+                # get grads and update model
                 self.s2c_queue.put('ack')
                 fetch_data = self.c2s_queue.get()
                 for k, v in zip(fetch_data.keys(), fetch_data.values()):
                     if k == 'v_func':
-                        for param, grad in zip(self.v_func.params(), v):
-                            param.grad = grad
+                        self.agent.v_grads_data = v
                     if k == 'q_func':
-                        for param, grad in zip(self.q_func.params(), v):
-                            param.grad = grad
+                        self.agent.q_grads_data = v
                     if k == 'p_func':
-                        for param, grad in zip(self.p_func.params(), v):
-                            param.grad = grad
-                if self.v_opt:
-                    self.v_opt.update()
-                if self.q_opt:
-                    self.q_opt.update()
-                if self.p_opt:
-                    self.p_opt.update()
+                        self.agent.p_grads_data = v
+                self.agent.update()
                 self.s2c_queue.put('ack')
             else:
                 raise Exception()

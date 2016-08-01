@@ -46,29 +46,43 @@ class Agent(object):
     """
 
     def __init__(self, _is_train, _gpu):
-        self.sess = tf.Session()
+        tmp = tf.ConfigProto()
+        tmp.gpu_options.allow_growth = True
+        self.sess = tf.Session(config=tmp)
 
         # alloc all models
         self.v_func = None
         self.v_vars = None
+        self.set_v_vars_op = None
+        self.set_v_vars_place = None
         self.v_grads_data = None
         self.v_grads_place = None
         self.target_v_func = None
         self.target_v_vars = None
+        self.set_target_v_vars_op = None
+        self.set_target_v_vars_place = None
 
         self.q_func = None
         self.q_vars = None
+        self.set_q_vars_op = None
+        self.set_q_vars_place = None
         self.q_grads_data = None
         self.q_grads_place = None
         self.target_q_func = None
         self.target_q_vars = None
+        self.set_target_q_vars_op = None
+        self.set_target_q_vars_place = None
 
         self.p_func = None
         self.p_vars = None
+        self.set_p_vars_op = None
+        self.set_p_vars_place = None
         self.p_grads_data = None
         self.p_grads_place = None
         self.target_p_func = None
         self.target_p_vars = None
+        self.set_target_p_vars_op = None
+        self.set_target_p_vars_place = None
 
         # alloc all optimizers
         self.v_opt = None
@@ -87,6 +101,73 @@ class Agent(object):
         # set place for x
         with tf.device(self.config.device):
             self.x_place = tf.placeholder(tf.float32)
+
+    def getVFunc(self):
+        if self.v_vars:
+            return self.sess.run(self.v_vars)
+        return None
+
+    def getTargetVFunc(self):
+        if self.target_v_vars:
+            return self.sess.run(self.target_v_vars)
+        return None
+
+    def getQFunc(self):
+        if self.q_vars:
+            return self.sess.run(self.q_vars)
+        return None
+
+    def getTargetQFunc(self):
+        if self.target_q_vars:
+            return self.sess.run(self.target_q_vars)
+        return None
+
+    def getPFunc(self):
+        if self.p_vars:
+            return self.sess.run(self.p_vars)
+        return None
+
+    def getTargetPFunc(self):
+        if self.target_p_vars:
+            return self.sess.run(self.target_p_vars)
+        return None
+
+    def createSetOpPlace(self, _vars):
+        place = [tf.placeholder(tf.float32) for _ in _vars]
+        op = [v.assign(p) for v, p in zip(_vars, place)]
+        return op, place
+
+    def createSetFeedDict(self, _place, _data):
+        tmp = {}
+        for p, d in zip(_place, _data):
+            tmp[p] = d
+        return tmp
+
+    def setVFunc(self, _data):
+        if self.v_vars:
+            if self.set_v_vars_op is None and self.set_v_vars_place is None:
+                self.set_v_vars_op, self.set_v_vars_place = \
+                    self.createSetOpPlace(self.v_vars)
+            self.sess.run(
+                self.set_v_vars_op,
+                feed_dict=self.createSetFeedDict(self.set_v_vars_place, _data))
+
+    def setTargetVFunc(self, _data):
+        if self.target_v_vars:
+            tmp = {}
+            for p, d in zip(self.set_target_v_vars_place, _data):
+                tmp[p] = d
+            self.sess.run(self.set_target_v_vars_op, feed_dict=tmp)
+
+    def setQFunc(self, _data):
+        if self.q_vars:
+            tmp = {}
+            for p, d in zip(self.set_q_vars_place, _data):
+                tmp[p] = d
+            self.sess.run(self.set_target_q_vars_op, feed_dict=tmp)
+
+    def setTargetQFunc(self, _data):
+        if self.target_q_vars:
 
     def training(self):
         """
@@ -180,6 +261,13 @@ class Agent(object):
 
         err_list = self.doTrain(batch_tuples, weights)
 
+        self.update()
+
+        # set err and merge
+        self.replay.setErr(batch_tuples, err_list)
+        self.replay.merge()
+
+    def update(self):
         # if has optimizers, then update model
         def apply_grads(_opt, _func, _places, _vars, _grads):
             if _opt is not None and _func is not None \
@@ -195,10 +283,6 @@ class Agent(object):
                         self.q_vars, self.q_grads_data)
             apply_grads(self.p_opt, self.p_func, self.p_grads_place,
                         self.p_vars, self.p_grads_data)
-
-        # set err and merge
-        self.replay.setErr(batch_tuples, err_list)
-        self.replay.merge()
 
     def doTrain(self, _batch_tuples, _weights):
         """
