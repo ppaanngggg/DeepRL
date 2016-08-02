@@ -150,24 +150,61 @@ class Agent(object):
                     self.createSetOpPlace(self.v_vars)
             self.sess.run(
                 self.set_v_vars_op,
-                feed_dict=self.createSetFeedDict(self.set_v_vars_place, _data))
+                feed_dict=self.createSetFeedDict(self.set_v_vars_place, _data)
+            )
 
     def setTargetVFunc(self, _data):
         if self.target_v_vars:
-            tmp = {}
-            for p, d in zip(self.set_target_v_vars_place, _data):
-                tmp[p] = d
-            self.sess.run(self.set_target_v_vars_op, feed_dict=tmp)
+            if self.set_target_v_vars_op is None and self.set_target_v_vars_place is None:
+                self.set_target_v_vars_op, self.set_target_v_vars_place  = \
+                    self.createSetOpPlace(self.target_v_vars)
+            self.sess.run(
+                self.set_target_v_vars_op,
+                feed_dict=self.createSetFeedDict(
+                    self.set_target_v_vars_place, _data)
+            )
 
     def setQFunc(self, _data):
         if self.q_vars:
-            tmp = {}
-            for p, d in zip(self.set_q_vars_place, _data):
-                tmp[p] = d
-            self.sess.run(self.set_target_q_vars_op, feed_dict=tmp)
+            if self.set_q_vars_op is None and self.set_q_vars_place is None:
+                self.set_q_vars_op, self.set_q_vars_place = \
+                    self.createSetOpPlace(self.q_vars)
+            self.sess.run(
+                self.set_q_vars_op,
+                feed_dict=self.createSetFeedDict(self.set_q_vars_place, _data)
+            )
 
     def setTargetQFunc(self, _data):
         if self.target_q_vars:
+            if self.set_target_q_vars_op is None and self.set_target_q_vars_place is None:
+                self.set_target_q_vars_op, self.set_target_q_vars_place = \
+                    self.createSetOpPlace(self.target_q_vars)
+            self.sess.run(
+                self.set_target_q_vars_op,
+                feed_dict=self.createSetFeedDict(
+                    self.set_target_q_vars_place, _data)
+            )
+
+    def setPFunc(self, _data):
+        if self.p_vars:
+            if self.set_p_vars_op is None and self.set_p_vars_place is None:
+                self.set_p_vars_op, self.set_p_vars_place = \
+                    self.createSetOpPlace(self.p_vars)
+            self.sess.run(
+                self.set_p_vars_op,
+                feed_dict=self.createSetFeedDict(self.set_p_vars_place, _data)
+            )
+
+    def setTargetPFunc(self, _data):
+        if self.target_p_vars:
+            if self.set_target_p_vars_op is None and self.set_target_p_vars_place is None:
+                self.set_target_p_vars_op, self.set_target_p_vars_place = \
+                    self.createSetOpPlace(self.target_p_vars)
+            self.sess.run(
+                self.set_target_p_vars_op,
+                feed_dict=self.createSetFeedDict(
+                    self.set_target_p_vars_place, _data)
+            )
 
     def training(self):
         """
@@ -382,16 +419,13 @@ class Agent(object):
         update target if exit
         """
         logger.info('update target func')
-
-        def assign_vars(_s, _d):
-            if _s and _d:
-                for _s_v, _d_v in zip(_s, _d):
-                    self.sess.run(_d_v.assign(_s_v))
-
         with tf.device(self.config.device):
-            assign_vars(self.v_vars, self.target_v_vars)
-            assign_vars(self.q_vars, self.target_q_vars)
-            assign_vars(self.p_vars, self.target_p_vars)
+            if self.v_vars and self.target_v_vars:
+                self.setTargetVFunc(self.getVFunc())
+            if self.q_vars and self.target_q_vars:
+                self.setTargetQFunc(self.getQFunc())
+            if self.p_vars and self.target_p_vars:
+                self.setTargetPFunc(self.getPFunc())
 
     def updateEpsilon(self):
         """
@@ -429,34 +463,20 @@ class Agent(object):
         filename = './models/epoch_' + str(_epoch) + '_step_' + str(_step)
         logger.info(filename)
         if self.v_vars:
-            np.save(
-                filename + '_v_func',
-                [self.sess.run(v) for v in self.v_vars]
-            )
+            np.save(filename + '_v_func', self.getVFunc())
         if self.q_vars:
-            np.save(
-                filename + '_q_func',
-                [self.sess.run(v) for v in self.q_vars]
-            )
+            np.save(filename + '_q_func', self.getQFunc())
         if self.p_vars:
-            np.save(
-                filename + '_p_func',
-                [self.sess.run(v) for v in self.p_vars]
-            )
+            np.save(filename + '_p_func', self.getPFunc())
 
     def load(self, filename):
         logger.info(filename)
-        if self.v_vars:
-            with tf.device(self.config.device):
-                for d, v in zip(np.load(filename + '_v_func.npy'), self.v_vars):
-                    self.sess.run(v.assign(d))
-        if self.q_vars:
-            with tf.device(self.config.device):
-                for d, v in zip(np.load(filename + '_q_func.npy'), self.q_vars):
-                    self.sess.run(v.assign(d))
-        if self.p_vars:
-            with tf.device(self.config.device):
-                for d, v in zip(np.load(filename + '_p_func.npy'), self.p_vars):
-                    self.sess.run(v.assign(d))
+        with tf.device(self.config.device):
+            if self.v_vars:
+                self.setVFunc(np.load(filename + '_v_func.npy'))
+            if self.q_vars:
+                self.setQFunc(np.load(filename + '_q_func.npy'))
+            if self.p_vars:
+                self.setPFunc(np.load(filename + '_p_func.npy'))
 
         self.updateTargetFunc()
