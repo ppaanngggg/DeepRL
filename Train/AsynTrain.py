@@ -1,4 +1,4 @@
-from multiprocessing import Process, Lock
+from multiprocessing import Process
 import random
 import sys
 from select import select
@@ -7,8 +7,7 @@ from time import time
 import zmq
 
 
-def func_train_process(_create_agent_func,
-                       _port, _lock,
+def func_train_process(_create_agent_func, _port,
                        _step_update_func):
     random.seed()
     agent = _create_agent_func()
@@ -17,7 +16,7 @@ def func_train_process(_create_agent_func,
     socket.connect('tcp://127.0.0.1:%s' % _port)
 
     def update_params():
-        socket.send('params')
+        socket.send_pyobj(['params'])
         fetch_data = socket.recv_pyobj()
         for k, v in zip(fetch_data.keys(), fetch_data.values()):
             if k == 'v_func':
@@ -35,10 +34,7 @@ def func_train_process(_create_agent_func,
             else:
                 raise Exception()
 
-    def upload_grads_update_params():
-        _lock.acquire()
-        socket.send('grads')
-        socket.recv()
+    def upload_grads():
         push_data = {}
         if agent.v_vars:
             push_data['v_func'] = agent.v_grads_data
@@ -46,29 +42,25 @@ def func_train_process(_create_agent_func,
             push_data['q_func'] = agent.q_grads_data
         if agent.p_vars:
             push_data['p_func'] = agent.p_grads_data
-        socket.send_pyobj(push_data)
+        socket.send_pyobj(['grads', push_data])
         socket.recv()
-        update_params()
-        _lock.release()
 
-    _lock.acquire()
     update_params()
-    _lock.release()
 
     while True:
         agent.startNewGame()
         step_local = 0
         while agent.step():
-            _lock.acquire()
-            socket.send('step')
-            tmp = socket.recv()
-            _lock.release()
+            socket.send_pyobj(['step'])
+            socket.recv()
             step_local += 1
             if step_local % _step_update_func == 0:
                 agent.train()
-                upload_grads_update_params()
+                upload_grads()
+                update_params()
         agent.train()
-        upload_grads_update_params()
+        upload_grads()
+        update_params()
 
 
 class AsynTrain(object):
@@ -82,13 +74,10 @@ class AsynTrain(object):
         self.socket = context.socket(zmq.REP)
         port = self.socket.bind_to_random_port('tcp://127.0.0.1')
 
-        self.lock = Lock()
-
         self.process_list = [
             Process(
                 target=func_train_process,
-                args=(_create_agent_func,
-                      port, self.lock,
+                args=(_create_agent_func, port,
                       _step_update_func))
             for _ in range(_process_num)
         ]
@@ -104,8 +93,10 @@ class AsynTrain(object):
     def run(self):
         start_time = time()
         while True:
-            fetch_data = self.socket.recv()
-            if fetch_data == 'step':
+            fetch_data = self.socket.recv_pyobj()
+            cmd = fetch_data[0]
+            if cmd == 'step':
+                # send ack
                 self.socket.send('ack')
                 # receive a step info, inc step_total
                 self.step_total += 1
@@ -114,13 +105,13 @@ class AsynTrain(object):
                     self.agent.updateTargetFunc()
                     print time() - start_time
                     raw_input()
+                    start_time = time()
                 if self.step_total % self.step_save == 0:
                     # if save model
                     self.agent.save("", self.step_total)
-            elif fetch_data == 'params':
+            elif cmd == 'params':
                 # request params
                 push_data = {}
-
                 if self.agent.v_vars:
                     push_data['v_func'] = self.agent.getVFunc()
                 if self.agent.q_vars:
@@ -134,10 +125,10 @@ class AsynTrain(object):
                 if self.agent.target_p_vars:
                     push_data['target_p_func'] = self.agent.getTargetPFunc()
                 self.socket.send_pyobj(push_data)
-            elif fetch_data == 'grads':
-                # get grads and update model
+            elif cmd == 'grads':
                 self.socket.send('ack')
-                fetch_data = self.socket.recv_pyobj()
+                # get grads and update model
+                fetch_data = fetch_data[1]
                 for k, v in zip(fetch_data.keys(), fetch_data.values()):
                     if k == 'v_func':
                         self.agent.v_grads_data = v
@@ -146,7 +137,6 @@ class AsynTrain(object):
                     if k == 'p_func':
                         self.agent.p_grads_data = v
                 self.agent.update()
-                self.socket.send('ack')
             else:
                 raise Exception()
 
