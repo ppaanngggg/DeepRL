@@ -1,23 +1,27 @@
 from multiprocessing import Process
+from threading import Thread, Lock
 import random
 import sys
 from select import select
 import tensorflow as tf
 from time import time
 import zmq
+from numba import jit
 
 
-def func_train_process(_create_agent_func, _port,
-                       _step_update_func):
+def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
+                       _index, _step_update_func):
     random.seed()
     agent = _create_agent_func()
     context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect('tcp://127.0.0.1:%s' % _port)
+    c2s_socket = context.socket(zmq.PUSH)
+    c2s_socket.connect('tcp://127.0.0.1:%s' % _c2s_port)
+    s2c_socket = context.socket(zmq.PULL)
+    s2c_socket.connect('tcp://127.0.0.1:%s' % _s2c_port)
 
     def update_params():
-        socket.send_pyobj(['params'])
-        fetch_data = socket.recv_pyobj()
+        c2s_socket.send_pyobj(['params', _index])
+        fetch_data = s2c_socket.recv_pyobj()
         for k, v in zip(fetch_data.keys(), fetch_data.values()):
             if k == 'v_func':
                 agent.setVFunc(v)
@@ -42,8 +46,8 @@ def func_train_process(_create_agent_func, _port,
             push_data['q_func'] = agent.q_grads_data
         if agent.p_vars:
             push_data['p_func'] = agent.p_grads_data
-        socket.send_pyobj(['grads', push_data])
-        socket.recv()
+        c2s_socket.send_pyobj(['grads', _index, push_data])
+        s2c_socket.recv()
 
     update_params()
 
@@ -51,8 +55,8 @@ def func_train_process(_create_agent_func, _port,
         agent.startNewGame()
         step_local = 0
         while agent.step():
-            socket.send_pyobj(['step'])
-            socket.recv()
+            c2s_socket.send_pyobj(['step', _index])
+            s2c_socket.recv()
             step_local += 1
             if step_local % _step_update_func == 0:
                 agent.train()
@@ -71,15 +75,19 @@ class AsynTrain(object):
                  _step_save=1e6,
                  _v_opt=None, _q_opt=None, _p_opt=None):
         context = zmq.Context()
-        self.socket = context.socket(zmq.REP)
-        port = self.socket.bind_to_random_port('tcp://127.0.0.1')
+        self.c2s_socket = context.socket(zmq.PULL)
+        c2s_port = self.c2s_socket.bind_to_random_port('tcp://127.0.0.1')
+        self.s2c_socket_list = [context.socket(zmq.PUSH)
+                                for _ in range(_process_num)]
+        s2c_port_list = [s.bind_to_random_port('tcp://127.0.0.1')
+                         for s in self.s2c_socket_list]
 
         self.process_list = [
             Process(
                 target=func_train_process,
-                args=(_create_agent_func, port,
-                      _step_update_func))
-            for _ in range(_process_num)
+                args=(_create_agent_func, c2s_port, s2c_port_list[i],
+                      i, _step_update_func))
+            for i in range(_process_num)
         ]
         for process in self.process_list:
             process.start()
@@ -90,22 +98,29 @@ class AsynTrain(object):
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
+        self.lock = Lock()
+
     def run(self):
-        start_time = time()
+        self.start_time = time()
         while True:
-            fetch_data = self.socket.recv_pyobj()
+            fetch_data = self.c2s_socket.recv_pyobj()
             cmd = fetch_data[0]
+            index = fetch_data[1]
             if cmd == 'step':
                 # send ack
-                self.socket.send('ack')
-                # receive a step info, inc step_total
+                self.s2c_socket_list[index].send('ack')
+                self.lock.acquire()
                 self.step_total += 1
+                self.lock.release()
+
                 if self.step_total % self.step_update_target == 0:
                     # if update target
+                    self.lock.acquire()
                     self.agent.updateTargetFunc()
-                    print time() - start_time
-                    raw_input()
-                    start_time = time()
+                    self.lock.release()
+                    print time() - self.start_time
+                    # raw_input()
+                    self.start_time = time()
                 if self.step_total % self.step_save == 0:
                     # if save model
                     self.agent.save("", self.step_total)
@@ -124,11 +139,11 @@ class AsynTrain(object):
                     push_data['target_q_func'] = self.agent.getTargetQFunc()
                 if self.agent.target_p_vars:
                     push_data['target_p_func'] = self.agent.getTargetPFunc()
-                self.socket.send_pyobj(push_data)
+                self.s2c_socket_list[index].send_pyobj(push_data)
             elif cmd == 'grads':
-                self.socket.send('ack')
+                self.s2c_socket_list[index].send('ack')
                 # get grads and update model
-                fetch_data = fetch_data[1]
+                fetch_data = fetch_data[2]
                 for k, v in zip(fetch_data.keys(), fetch_data.values()):
                     if k == 'v_func':
                         self.agent.v_grads_data = v
