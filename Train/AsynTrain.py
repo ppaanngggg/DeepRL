@@ -1,12 +1,9 @@
 from multiprocessing import Process
-from threading import Thread, Lock
 import random
 import sys
 from select import select
 import tensorflow as tf
-from time import time
 import zmq
-from numba import jit
 
 
 def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
@@ -98,10 +95,7 @@ class AsynTrain(object):
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
-        self.lock = Lock()
-
     def run(self):
-        self.start_time = time()
         while True:
             fetch_data = self.c2s_socket.recv_pyobj()
             cmd = fetch_data[0]
@@ -109,18 +103,11 @@ class AsynTrain(object):
             if cmd == 'step':
                 # send ack
                 self.s2c_socket_list[index].send('ack')
-                self.lock.acquire()
                 self.step_total += 1
-                self.lock.release()
 
                 if self.step_total % self.step_update_target == 0:
                     # if update target
-                    self.lock.acquire()
                     self.agent.updateTargetFunc()
-                    self.lock.release()
-                    print time() - self.start_time
-                    # raw_input()
-                    self.start_time = time()
                 if self.step_total % self.step_save == 0:
                     # if save model
                     self.agent.save("", self.step_total)
