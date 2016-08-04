@@ -8,6 +8,12 @@ Framework for deep reinforcement learning.
 - Very easy to run algorithms asynchronously
 - Easy to add new algorithms
 
+## Dependences
+- python2
+- numpy
+- zmq (for asyn train)
+- tensorflow
+
 ## Modules:
 
 ### 1\. Agent
@@ -61,18 +67,23 @@ Framework for deep reinforcement learning.
 - TmpReplay : just for module, no replay at all
 
 ### 3\. Train
+
 - Train : normal trainer
 - AsynTrain : asynchronous trainer
 
-### 4. Test
+### 4\. Test
+
 - Test : normal tester
 
-### 5. Env
+### 5\. Env
+
 - Env : Env interface, similar to gym's interfaces. User has to reimplement interface functions
 
 ## Example
-https://github.com/ppaanngggg/deep_rl_experiment
+
+<https://github.com/ppaanngggg/deep_rl_experiment>
 
 ## TODO
+
 1. turn Chainer to Tensorflow
 2. add continue control
