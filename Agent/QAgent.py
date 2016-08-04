@@ -63,14 +63,7 @@ class QAgent(Agent):
                 self.grads_op = tf.gradients(loss, self.q_vars)
 
                 if _optimizer:
-                    # if opt exist, then update vars
-                    self.q_grads_place = [
-                        tf.placeholder(tf.float32) for _ in self.q_vars
-                    ]
-                    self.q_opt = _optimizer.apply_gradients([
-                        (p, v) for p, v in zip(
-                            self.q_grads_place, self.q_vars)
-                    ])
+                    self.createQOpt(_optimizer)
 
                 self.replay = _replay
 

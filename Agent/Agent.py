@@ -102,6 +102,35 @@ class Agent(object):
         with tf.device(self.config.device):
             self.x_place = tf.placeholder(tf.float32)
 
+    def createVOpt(self, _opt):
+        self.v_grads_place = [
+            tf.placeholder(tf.float32) for _ in self.v_vars
+        ]
+        self.v_opt = _opt.apply_gradients([
+            (p, v) for p, v in zip(
+                self.v_grads_place, self.v_vars)
+        ])
+
+    def createQOpt(self, _opt):
+        # if opt exist, then update vars
+        self.q_grads_place = [
+            tf.placeholder(tf.float32) for _ in self.q_vars
+        ]
+        self.q_opt = _opt.apply_gradients([
+            (p, v) for p, v in zip(
+                self.q_grads_place, self.q_vars)
+        ])
+
+    def createPOpt(self, _opt):
+        self.p_grads_place = [
+            tf.placeholder(tf.float32) for _ in self.p_vars
+        ]
+        self.p_opt = _opt.apply_gradients([
+            (p, v) for p, v in zip(
+                self.p_grads_place, self.p_vars)
+        ])
+
+
     def getVFunc(self):
         if self.v_vars:
             return self.sess.run(self.v_vars)

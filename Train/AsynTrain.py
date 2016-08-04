@@ -4,6 +4,7 @@ import sys
 from select import select
 import tensorflow as tf
 import zmq
+from time import time
 
 
 def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
@@ -90,6 +91,14 @@ class AsynTrain(object):
             process.start()
 
         self.agent = _create_agent_func()
+        if _v_opt is not None:
+            self.agent.createVOpt(_v_opt)
+        if _q_opt is not None:
+            self.agent.createQOpt(_q_opt)
+        if _p_opt is not None:
+            self.agent.createPOpt(_p_opt)
+
+        self.agent.sess.run(tf.initialize_all_variables())
 
         self.step_total = 0
         self.step_update_target = _step_update_target
@@ -104,7 +113,6 @@ class AsynTrain(object):
                 # send ack
                 self.s2c_socket_list[index].send('ack')
                 self.step_total += 1
-
                 if self.step_total % self.step_update_target == 0:
                     # if update target
                     self.agent.updateTargetFunc()

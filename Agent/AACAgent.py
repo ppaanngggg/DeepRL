@@ -80,21 +80,10 @@ class AACAgent(Agent):
                 self.actor_grads_op = tf.gradients(loss, self.p_vars)
 
                 if _actor_optimizer:
-                    self.p_grads_place = [
-                        tf.placeholder(tf.float32) for _ in self.p_vars
-                    ]
-                    self.p_opt = _actor_optimizer.apply_gradients([
-                        (p, v) for p, v in zip(
-                            self.p_grads_place, self.p_vars)
-                    ])
+                    self.createPOpt(_actor_optimizer)
                 if _critic_optimizer:
-                    self.v_grads_place = [
-                        tf.placeholder(tf.float32) for _ in self.v_vars
-                    ]
-                    self.v_opt = _critic_optimizer.apply_gradients([
-                        (p, v) for p, v in zip(
-                            self.v_grads_place, self.v_vars)
-                    ])
+                    self.createVOpt(_critic_optimizer)
+
 
                 self.replay = _replay
 
