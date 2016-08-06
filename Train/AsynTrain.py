@@ -3,12 +3,14 @@ import random
 import sys
 from select import select
 import tensorflow as tf
+import numpy as np
 import zmq
+# import SharedArray as sa
 from time import time
 
 
 def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
-                       _index, _step_update_func):
+                       _shared_array_name_dict, _index, _step_update_func):
     random.seed()
     agent = _create_agent_func()
     context = zmq.Context()
@@ -16,6 +18,13 @@ def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
     c2s_socket.connect('tcp://127.0.0.1:%s' % _c2s_port)
     s2c_socket = context.socket(zmq.PULL)
     s2c_socket.connect('tcp://127.0.0.1:%s' % _s2c_port)
+
+    shared_array_dict = {}
+    for k, v in zip(_shared_array_name_dict.keys(), _shared_array_name_dict.values()):
+        shared_array_dict[k] = []
+        for _v in v:
+            shared_array_dict[k].append(sa.attach(_v))
+    print shared_array_dict
 
     def update_params():
         c2s_socket.send_pyobj(['params', _index])
@@ -80,16 +89,6 @@ class AsynTrain(object):
         s2c_port_list = [s.bind_to_random_port('tcp://127.0.0.1')
                          for s in self.s2c_socket_list]
 
-        self.process_list = [
-            Process(
-                target=func_train_process,
-                args=(_create_agent_func, c2s_port, s2c_port_list[i],
-                      i, _step_update_func))
-            for i in range(_process_num)
-        ]
-        for process in self.process_list:
-            process.start()
-
         self.agent = _create_agent_func()
         if _v_opt is not None:
             self.agent.createVOpt(_v_opt)
@@ -100,9 +99,44 @@ class AsynTrain(object):
 
         self.agent.sess.run(tf.initialize_all_variables())
 
+        self.shared_array_dict = {}
+        shared_array_name_dict = {}
+
+        def createSharedArray(_name, _data_list):
+            self.shared_array_dict[_name] = []
+            shared_array_name_dict[_name] = []
+            for i in range(len(_data_list)):
+                array_name = 'shm://' + _name + '_' + str(i)
+                shared_array_name_dict[_name].append(array_name)
+                array = sa.create(array_name, _data_list[i].shape)
+                np.copyto(array, _data_list[i])
+
+        if self.agent.v_vars:
+            createSharedArray('v_vars', self.agent.getVFunc())
+        if self.agent.q_vars:
+            createSharedArray('q_vars', self.agent.getQFunc())
+        if self.agent.p_vars:
+            createSharedArray('p_vars', self.agent.getPFunc())
+        if self.agent.target_v_vars:
+            createSharedArray('target_v_vars', self.agent.getTargetVFunc())
+        if self.agent.target_q_vars:
+            createSharedArray('target_q_vars', self.agent.getTargetQFunc())
+        if self.agent.target_p_vars:
+            createSharedArray('target_p_vars', self.agent.getTargetPFunc())
+
         self.step_total = 0
         self.step_update_target = _step_update_target
         self.step_save = _step_save
+
+        self.process_list = [
+            Process(
+                target=func_train_process,
+                args=(_create_agent_func, c2s_port, s2c_port_list[i],
+                      shared_array_name_dict, i, _step_update_func))
+            for i in range(_process_num)
+        ]
+        for process in self.process_list:
+            process.start()
 
     def run(self):
         while True:
