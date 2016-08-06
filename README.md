@@ -11,6 +11,7 @@ Framework for deep reinforcement learning.
 ## Dependences
 - python2
 - numpy
+- SharedArray
 - zmq (for asyn train)
 - tensorflow
 
