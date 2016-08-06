@@ -1,35 +1,38 @@
-from multiprocessing import Process
+from multiprocessing import Process, Lock
 import random
 import sys
 from select import select
 import tensorflow as tf
 import numpy as np
 import zmq
-# import SharedArray as sa
+import SharedArray as sa
 from time import time
 
 
-def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
-                       _shared_array_name_dict, _index, _step_update_func):
+def func_train_process(_create_agent_func, _port,
+                       _vars_lock, _grads_lock, _step_update_func):
     random.seed()
     agent = _create_agent_func()
     context = zmq.Context()
-    c2s_socket = context.socket(zmq.PUSH)
-    c2s_socket.connect('tcp://127.0.0.1:%s' % _c2s_port)
-    s2c_socket = context.socket(zmq.PULL)
-    s2c_socket.connect('tcp://127.0.0.1:%s' % _s2c_port)
+    socket = context.socket(zmq.REQ)
+    socket.connect('tcp://127.0.0.1:%s' % _port)
 
-    shared_array_dict = {}
-    for k, v in zip(_shared_array_name_dict.keys(), _shared_array_name_dict.values()):
-        shared_array_dict[k] = []
+    socket.send('shared')
+    shared_vars_name_dict, shared_grads_name_dict = socket.recv_pyobj()
+    shared_vars_dict = {}
+    for k, v in zip(shared_vars_name_dict.keys(), shared_vars_name_dict.values()):
+        shared_vars_dict[k] = []
         for _v in v:
-            shared_array_dict[k].append(sa.attach(_v))
-    print shared_array_dict
+            shared_vars_dict[k].append(sa.attach(_v))
+    shared_grads_dict = {}
+    for k, v in zip(shared_grads_name_dict.keys(), shared_grads_name_dict.values()):
+        shared_grads_dict[k] = []
+        for _v in v:
+            shared_grads_dict[k].append(sa.attach(_v))
 
     def update_params():
-        c2s_socket.send_pyobj(['params', _index])
-        fetch_data = s2c_socket.recv_pyobj()
-        for k, v in zip(fetch_data.keys(), fetch_data.values()):
+        _vars_lock.acquire()
+        for k, v in zip(shared_vars_dict.keys(), shared_vars_dict.values()):
             if k == 'v_func':
                 agent.setVFunc(v)
             elif k == 'q_func':
@@ -44,17 +47,23 @@ def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
                 agent.setTargetPFunc(v)
             else:
                 raise Exception()
+        _vars_lock.release()
+
+    def setGrads(_key, _grads):
+        for d, g in zip(shared_grads_dict[_key], _grads):
+            np.copyto(d, g)
 
     def upload_grads():
-        push_data = {}
+        _grads_lock.acquire()
         if agent.v_vars:
-            push_data['v_func'] = agent.v_grads_data
+            setGrads('v_func', agent.v_grads_data)
         if agent.q_vars:
-            push_data['q_func'] = agent.q_grads_data
+            setGrads('q_func', agent.q_grads_data)
         if agent.p_vars:
-            push_data['p_func'] = agent.p_grads_data
-        c2s_socket.send_pyobj(['grads', _index, push_data])
-        s2c_socket.recv()
+            setGrads('p_func', agent.p_grads_data)
+        socket.send('grads')
+        socket.recv()
+        _grads_lock.release()
 
     update_params()
 
@@ -62,8 +71,8 @@ def func_train_process(_create_agent_func, _c2s_port, _s2c_port,
         agent.startNewGame()
         step_local = 0
         while agent.step():
-            c2s_socket.send_pyobj(['step', _index])
-            s2c_socket.recv()
+            socket.send('step')
+            socket.recv()
             step_local += 1
             if step_local % _step_update_func == 0:
                 agent.train()
@@ -82,12 +91,21 @@ class AsynTrain(object):
                  _step_save=1e6,
                  _v_opt=None, _q_opt=None, _p_opt=None):
         context = zmq.Context()
-        self.c2s_socket = context.socket(zmq.PULL)
-        c2s_port = self.c2s_socket.bind_to_random_port('tcp://127.0.0.1')
-        self.s2c_socket_list = [context.socket(zmq.PUSH)
-                                for _ in range(_process_num)]
-        s2c_port_list = [s.bind_to_random_port('tcp://127.0.0.1')
-                         for s in self.s2c_socket_list]
+        self.socket = context.socket(zmq.REP)
+        port = self.socket.bind_to_random_port('tcp://127.0.0.1')
+
+        self.vars_lock = Lock()
+        self.grads_lock = Lock()
+
+        self.process_list = [
+            Process(
+                target=func_train_process,
+                args=(_create_agent_func, port,
+                      self.vars_lock, self.grads_lock, _step_update_func))
+            for _ in range(_process_num)
+        ]
+        for process in self.process_list:
+            process.start()
 
         self.agent = _create_agent_func()
         if _v_opt is not None:
@@ -99,88 +117,101 @@ class AsynTrain(object):
 
         self.agent.sess.run(tf.initialize_all_variables())
 
-        self.shared_array_dict = {}
-        shared_array_name_dict = {}
+        self.shared_vars_dict = {}
+        self.shared_vars_name_dict = {}
 
-        def createSharedArray(_name, _data_list):
-            self.shared_array_dict[_name] = []
-            shared_array_name_dict[_name] = []
+        def createSharedVars(_name, _data_list):
+            self.shared_vars_dict[_name] = []
+            self.shared_vars_name_dict[_name] = []
             for i in range(len(_data_list)):
                 array_name = 'shm://' + _name + '_' + str(i)
-                shared_array_name_dict[_name].append(array_name)
+                self.shared_vars_name_dict[_name].append(array_name)
                 array = sa.create(array_name, _data_list[i].shape)
                 np.copyto(array, _data_list[i])
+                self.shared_vars_dict[_name].append(array)
+
+        self.shared_grads_dict = {}
+        self.shared_grads_name_dict = {}
+
+        def createSharedGrads(_name, _data_list):
+            self.shared_grads_dict[_name] = []
+            self.shared_grads_name_dict[_name] = []
+            for i in range(len(_data_list)):
+                array_name = 'shm://' + _name + '_grad_' + str(i)
+                self.shared_grads_name_dict[_name].append(array_name)
+                array = sa.create(array_name, _data_list[i].shape)
+                self.shared_grads_dict[_name].append(array)
 
         if self.agent.v_vars:
-            createSharedArray('v_vars', self.agent.getVFunc())
+            createSharedVars('v_func', self.agent.getVFunc())
+            createSharedGrads('v_func', self.agent.getVFunc())
         if self.agent.q_vars:
-            createSharedArray('q_vars', self.agent.getQFunc())
+            createSharedVars('q_func', self.agent.getQFunc())
+            createSharedGrads('q_func', self.agent.getQFunc())
         if self.agent.p_vars:
-            createSharedArray('p_vars', self.agent.getPFunc())
+            createSharedVars('p_func', self.agent.getPFunc())
+            createSharedGrads('p_func', self.agent.getPFunc())
         if self.agent.target_v_vars:
-            createSharedArray('target_v_vars', self.agent.getTargetVFunc())
+            createSharedVars('target_v_func', self.agent.getTargetVFunc())
         if self.agent.target_q_vars:
-            createSharedArray('target_q_vars', self.agent.getTargetQFunc())
+            createSharedVars('target_q_func', self.agent.getTargetQFunc())
         if self.agent.target_p_vars:
-            createSharedArray('target_p_vars', self.agent.getTargetPFunc())
+            createSharedVars('target_p_func', self.agent.getTargetPFunc())
 
         self.step_total = 0
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
-        self.process_list = [
-            Process(
-                target=func_train_process,
-                args=(_create_agent_func, c2s_port, s2c_port_list[i],
-                      shared_array_name_dict, i, _step_update_func))
-            for i in range(_process_num)
-        ]
-        for process in self.process_list:
-            process.start()
-
     def run(self):
+        def setVars(_key, _vars):
+            for d, v in zip(self.shared_vars_dict[_key], _vars):
+                np.copyto(d, v)
+
         while True:
-            fetch_data = self.c2s_socket.recv_pyobj()
-            cmd = fetch_data[0]
-            index = fetch_data[1]
-            if cmd == 'step':
+            cmd = self.socket.recv()
+            if cmd == 'shared':
+                self.socket.send_pyobj(
+                    (self.shared_vars_name_dict, self.shared_grads_name_dict)
+                )
+            elif cmd == 'step':
                 # send ack
-                self.s2c_socket_list[index].send('ack')
+                self.socket.send('ack')
                 self.step_total += 1
                 if self.step_total % self.step_update_target == 0:
                     # if update target
+                    self.vars_lock.acquire()
                     self.agent.updateTargetFunc()
+                    if self.agent.target_v_vars:
+                        setVars('target_v_func', self.agent.getTargetVFunc())
+                    if self.agent.target_q_vars:
+                        setVars('target_q_func', self.agent.getTargetQFunc())
+                    if self.agent.target_p_vars:
+                        setVars('target_p_func', self.agent.getTargetPFunc())
+                    self.vars_lock.release()
                 if self.step_total % self.step_save == 0:
                     # if save model
                     self.agent.save("", self.step_total)
-            elif cmd == 'params':
-                # request params
-                push_data = {}
-                if self.agent.v_vars:
-                    push_data['v_func'] = self.agent.getVFunc()
-                if self.agent.q_vars:
-                    push_data['q_func'] = self.agent.getQFunc()
-                if self.agent.p_vars:
-                    push_data['p_func'] = self.agent.getPFunc()
-                if self.agent.target_v_vars:
-                    push_data['target_v_func'] = self.agent.getTargetVFunc()
-                if self.agent.target_q_vars:
-                    push_data['target_q_func'] = self.agent.getTargetQFunc()
-                if self.agent.target_p_vars:
-                    push_data['target_p_func'] = self.agent.getTargetPFunc()
-                self.s2c_socket_list[index].send_pyobj(push_data)
             elif cmd == 'grads':
-                self.s2c_socket_list[index].send('ack')
                 # get grads and update model
-                fetch_data = fetch_data[2]
-                for k, v in zip(fetch_data.keys(), fetch_data.values()):
+                for k, g in zip(self.shared_grads_dict.keys(), self.shared_grads_dict.values()):
                     if k == 'v_func':
-                        self.agent.v_grads_data = v
+                        self.agent.v_grads_data = g
                     if k == 'q_func':
-                        self.agent.q_grads_data = v
+                        self.agent.q_grads_data = g
                     if k == 'p_func':
-                        self.agent.p_grads_data = v
+                        self.agent.p_grads_data = g
                 self.agent.update()
+
+                self.vars_lock.acquire()
+                if self.agent.v_vars:
+                    setVars('v_func', self.agent.getVFunc())
+                if self.agent.q_vars:
+                    setVars('q_func', self.agent.getQFunc())
+                if self.agent.p_vars:
+                    setVars('p_func', self.agent.getPFunc())
+                self.vars_lock.release()
+
+                self.socket.send('ack')
             else:
                 raise Exception()
 
