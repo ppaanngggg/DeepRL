@@ -27,6 +27,7 @@ class AACAgent(Agent):
         _gpu (bool): whether to use gpu
         _gamma (float): reward decay
         _batch_size (int): how much tuples to pull from replay
+        _beta_entropy (float): beta for entropy
         _grad_clip (float): clip grad, 0 is no clip
     """
 
@@ -83,7 +84,6 @@ class AACAgent(Agent):
                     self.createPOpt(_actor_optimizer)
                 if _critic_optimizer:
                     self.createVOpt(_critic_optimizer)
-
 
                 self.replay = _replay
 
