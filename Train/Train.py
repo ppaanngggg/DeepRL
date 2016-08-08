@@ -44,12 +44,14 @@ class Train(object):
                     print '[[[ interrupted ]]]'
                     s = sys.stdin.readline().strip()
                     while True:
-                        print '[[[ Please input (save, quit, ...) ]]]'
+                        print '[[[ Please input (save, continue, quit, ...) ]]]'
                         s = sys.stdin.readline().strip()
                         if s == 'save':
                             self.agent.save(self.epoch, self.step_local)
-                        elif s == 'quit':
+                        elif s == 'continue':
                             break
+                        elif s == 'quit':
+                            return
                         else:
                             print '[[[ unknow cmd... ]]]'
                             pass

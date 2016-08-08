@@ -229,12 +229,22 @@ class AsynTrain(object):
                 print '[[[ interrupted ]]]'
                 s = sys.stdin.readline().strip()
                 while True:
-                    print '[[[ Please input (save, quit, ...) ]]]'
+                    print '[[[ Please input (save, continue, quit, ...) ]]]'
                     s = sys.stdin.readline().strip()
                     if s == 'save':
                         self.agent.save("", self.step_total)
-                    elif s == 'quit':
+                    elif s == 'continue':
                         break
+                    elif s == 'quit':
+                        for p in self.process_list:
+                            p.terminate()
+                        for names in self.shared_vars_name_dict.values():
+                            for n in names:
+                                sa.delete(n)
+                        for names in self.shared_grads_name_dict.values():
+                            for n in names:
+                                sa.delete(n)
+                        return
                     else:
                         print '[[[ unknow cmd... ]]]'
                         pass
