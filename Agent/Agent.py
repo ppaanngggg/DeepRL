@@ -130,7 +130,6 @@ class Agent(object):
                 self.p_grads_place, self.p_vars)
         ])
 
-
     def getVFunc(self):
         if self.v_vars:
             return self.sess.run(self.v_vars)

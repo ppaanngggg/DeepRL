@@ -70,18 +70,18 @@ def func_train_process(_create_agent_func, _port,
     while True:
         agent.startNewGame()
         step_local = 0
-        while agent.step():
-            if step_local % _step_update_func == 0:
+        while True:
+            in_game = agent.step()
+            step_local += 1
+            if not in_game or step_local % _step_update_func == 0:
                 agent.train()
                 upload_grads()
             socket.send('step')
             socket.recv()
-            step_local += 1
-            if step_local % _step_update_func == 0:
+            if not in_game or step_local % _step_update_func == 0:
                 update_params()
-        agent.train()
-        upload_grads()
-        update_params()
+            if not in_game:
+                break
 
 
 class AsynTrain(object):
