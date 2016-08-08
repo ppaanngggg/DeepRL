@@ -71,12 +71,13 @@ def func_train_process(_create_agent_func, _port,
         agent.startNewGame()
         step_local = 0
         while agent.step():
+            if step_local % _step_update_func == 0:
+                agent.train()
+                upload_grads()
             socket.send('step')
             socket.recv()
             step_local += 1
             if step_local % _step_update_func == 0:
-                agent.train()
-                upload_grads()
                 update_params()
         agent.train()
         upload_grads()
@@ -90,13 +91,16 @@ class AsynTrain(object):
                  _step_update_target=1e3,
                  _step_save=1e6,
                  _v_opt=None, _q_opt=None, _p_opt=None):
+        # create socket to connect actors
         context = zmq.Context()
         self.socket = context.socket(zmq.REP)
         port = self.socket.bind_to_random_port('tcp://127.0.0.1')
-
+        # lock when vars is being written
         self.vars_lock = Lock()
+        # lock when upload grads
         self.grads_lock = Lock()
 
+        # start actors
         self.process_list = [
             Process(
                 target=func_train_process,
@@ -107,6 +111,7 @@ class AsynTrain(object):
         for process in self.process_list:
             process.start()
 
+        # create agent, and create optimizer
         self.agent = _create_agent_func()
         if _v_opt is not None:
             self.agent.createVOpt(_v_opt)
@@ -116,7 +121,9 @@ class AsynTrain(object):
             self.agent.createPOpt(_p_opt)
 
         self.agent.sess.run(tf.initialize_all_variables())
+        self.agent.updateTargetFunc()
 
+        # alloc mem for vars
         self.shared_vars_dict = {}
         self.shared_vars_name_dict = {}
 
@@ -126,10 +133,11 @@ class AsynTrain(object):
             for i in range(len(_data_list)):
                 array_name = 'shm://' + _name + '_' + str(i)
                 self.shared_vars_name_dict[_name].append(array_name)
-                array = sa.create(array_name, _data_list[i].shape)
+                array = sa.create(array_name, _data_list[i].shape, np.float32)
                 np.copyto(array, _data_list[i])
                 self.shared_vars_dict[_name].append(array)
 
+        # alloc mem for grads
         self.shared_grads_dict = {}
         self.shared_grads_name_dict = {}
 
@@ -139,7 +147,7 @@ class AsynTrain(object):
             for i in range(len(_data_list)):
                 array_name = 'shm://' + _name + '_grad_' + str(i)
                 self.shared_grads_name_dict[_name].append(array_name)
-                array = sa.create(array_name, _data_list[i].shape)
+                array = sa.create(array_name, _data_list[i].shape, np.float32)
                 self.shared_grads_dict[_name].append(array)
 
         if self.agent.v_vars:
@@ -175,7 +183,6 @@ class AsynTrain(object):
                 )
             elif cmd == 'step':
                 # send ack
-                self.socket.send('ack')
                 self.step_total += 1
                 if self.step_total % self.step_update_target == 0:
                     # if update target
@@ -188,6 +195,7 @@ class AsynTrain(object):
                     if self.agent.target_p_vars:
                         setVars('target_p_func', self.agent.getTargetPFunc())
                     self.vars_lock.release()
+                self.socket.send('ack')
                 if self.step_total % self.step_save == 0:
                     # if save model
                     self.agent.save("", self.step_total)
