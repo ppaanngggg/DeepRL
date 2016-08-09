@@ -13,8 +13,9 @@ class NStepQAgent(QAgent):
     Asynchronous Methods for Deep Reinforcement Learning
 
     Args:
-        _model (function): necessary, model to create q func,
-                        output's dim should be equal with num of actions
+        _model (function): necessary,
+            return: 1. q func output op, output's dim should be equal with num of actions
+                    2. vars list
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
         _optimizer (chainer.optimizers): not necessary, if not then func won't be updated
@@ -72,6 +73,6 @@ class NStepQAgent(QAgent):
                 }
             )
             # set grads data
-            self.q_grads_data = ret[1:]
+            self.grads_data = ret[1:]
         # return err_list
         return ret[0]

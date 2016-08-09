@@ -13,16 +13,13 @@ class AACAgent(Agent):
     Asynchronous Methods for Deep Reinforcement Learning
 
     Args:
-        _actor (function): necessary, head part of p func,
-                        output's dim should be equal with num of actions
-        _critic (function): necessary, head part of v func,
-                        output's dim should 1
+        _model (function): necessary
+            return: 1. p func output op, output's dim should be equal with num of actions
+                    2. v func output op, output's dim should 1
+                    2. vars list
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
-        _actor_optimizer (chainer.optimizers): not necessary, opter for actor,
-                                                if not then func won't be updated
-        _critic_optimizer (chainer.optimizers): not necessary, opter for critic,
-                                                if not then func won't be updated
+        _optimizer (optimizers): not necessary, if not then func won't be updated
         _replay (Replay): necessary for training
         _gpu (bool): whether to use gpu
         _gamma (float): reward decay
@@ -31,9 +28,10 @@ class AACAgent(Agent):
         _grad_clip (float): clip grad, 0 is no clip
     """
 
-    def __init__(self, _actor, _critic, _env, _is_train=True,
-                 _actor_optimizer=None, _critic_optimizer=None, _replay=None,
-                 _gpu=False, _gamma=0.99, _batch_size=32, _beta_entropy=0.01,
+    def __init__(self, _model, _env, _is_train=True,
+                 _optimizer=None, _replay=None,
+                 _gpu=False, _gamma=0.99,
+                 _batch_size=32, _beta_entropy=0.01,
                  _grad_clip=1.):
 
         super(AACAgent, self).__init__(_is_train, _gpu)
@@ -43,47 +41,33 @@ class AACAgent(Agent):
 
         with tf.device(self.config.device):
             # create p func
-            self.p_func, self.p_vars = _actor(self.x_place)
-            # get softmax of p func
-            self.softmax_op = tf.nn.softmax(self.p_func)
-            self.v_func, self.v_vars = _critic(self.x_place)
+            self.p_func, self.v_func, self.vars = _model(self.x_place)
 
             if self.is_train:
-                # critic part :
                 # place for target, weight
                 self.target_place = tf.placeholder(tf.float32)
                 self.weight_place = tf.placeholder(tf.float32)
                 # get diff of target and v
-                self.diff_op = self.target_place - \
-                    tf.reshape(self.v_func, [-1])
+                diff_op = self.target_place - tf.reshape(self.v_func, [-1])
                 # get err of value and target
-                self.err_list_op = 0.5 * tf.square(self.diff_op)
-                # get total loss, mul with weight, if weight exist
-                loss = tf.reduce_mean(self.err_list_op * self.weight_place)
-                # compute grads of vars
-                self.critic_grads_op = tf.gradients(loss, self.v_vars)
-
-                # actor part :
+                self.err_list_op = 0.5 * tf.square(diff_op)
                 # place for action, diff
                 self.action_place = tf.placeholder(tf.float32)
-                self.diff_place = tf.placeholder(tf.float32)
                 # get entropy
-                entropy = - tf.reduce_sum(
-                    self.softmax_op * tf.log(self.softmax_op + 1e-10))
+                entropy = tf.reduce_sum(
+                    self.p_func * tf.log(self.p_func + 1e-10))
                 # get loss
                 loss = tf.reduce_sum(
-                    -tf.log(
-                        tf.reduce_sum(self.softmax_op * self.action_place, 1)
+                    tf.log(
+                        tf.reduce_sum(self.p_func * self.action_place, 1)
                         + 1e-10
-                    ) * self.diff_place
-                ) + _beta_entropy * entropy
+                    ) * diff_op
+                ) + _beta_entropy * entropy + tf.reduce_mean(self.err_list_op * self.weight_place)
                 # compute grads of vars
-                self.actor_grads_op = tf.gradients(loss, self.p_vars)
+                self.grads_op = tf.gradients(loss, self.vars)
 
-                if _actor_optimizer:
-                    self.createPOpt(_actor_optimizer)
-                if _critic_optimizer:
-                    self.createVOpt(_critic_optimizer)
+                if _optimizer:
+                    self.createOpt(_optimizer)
 
                 self.replay = _replay
 
@@ -103,7 +87,7 @@ class AACAgent(Agent):
         Returns:
             still in game or not
         """
-        return super(AACAgent, self).step(self.softmax_op)
+        return super(AACAgent, self).step(self.p_func)
 
     def forward(self, _next_x):
         with tf.device(self.config.device):
@@ -113,38 +97,27 @@ class AACAgent(Agent):
 
     def grad(self, _cur_x, _next_output, _batch_tuples, _weights):
         with tf.device(self.config.device):
-            # critic part
+            # get action data (one hot)
+            action_data = self.getActionData(
+                self.p_func.get_shape().as_list()[1], _batch_tuples)
             # get target data
             target_data = self.getVTargetData(_next_output, _batch_tuples)
             # get weight data
             weight_data = self.getWeightData(_weights, _batch_tuples)
-            # get diff [0], err list [1] and grads [2:]
+            # get err list [0] and grads [1:]
             ret = self.sess.run(
-                [self.diff_op, self.err_list_op] + self.critic_grads_op,
+                [self.err_list_op] + self.grads_op,
                 feed_dict={
                     self.x_place: _cur_x,
+                    self.action_place: action_data,
                     self.target_place: target_data,
                     self.weight_place: weight_data,
                 }
             )
-            diff_data = ret[0]
-            err_list = ret[1]
+            err_list = ret[0]
             # set v grads data
-            self.v_grads_data = ret[2:]
+            self.grads_data = ret[1:]
 
-            # actor part
-            # get action data (one hot)
-            action_data = self.getActionData(
-                self.softmax_op.get_shape().as_list()[1], _batch_tuples)
-            # set p grad data
-            self.p_grads_data = self.sess.run(
-                self.actor_grads_op,
-                feed_dict={
-                    self.x_place: _cur_x,
-                    self.action_place: action_data,
-                    self.diff_place: diff_data,
-                }
-            )
         # return err_list
         return err_list
 

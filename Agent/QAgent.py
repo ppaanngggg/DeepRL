@@ -13,8 +13,9 @@ class QAgent(Agent):
     Human-level control through deep reinforcement learning
 
     Args:
-        _model (function): necessary, model to create q func,
-                        output's dim should be equal with num of actions
+        _model (function): necessary,
+            return: 1. q func output op, output's dim should be equal with num of actions
+                    2. vars list
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
         _optimizer (chainer.optimizers): not necessary, if not then func won't be updated
