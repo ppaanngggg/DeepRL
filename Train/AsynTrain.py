@@ -33,18 +33,10 @@ def func_train_process(_create_agent_func, _port,
     def update_params():
         _vars_lock.acquire()
         for k, v in zip(shared_vars_dict.keys(), shared_vars_dict.values()):
-            if k == 'v_func':
-                agent.setVFunc(v)
-            elif k == 'q_func':
-                agent.setQFunc(v)
-            elif k == 'p_func':
-                agent.setPFunc(v)
-            elif k == 'target_v_func':
-                agent.setTargetVFunc(v)
-            elif k == 'target_q_func':
-                agent.setTargetQFunc(v)
-            elif k == 'target_p_func':
-                agent.setTargetPFunc(v)
+            if k == 'vars':
+                agent.setVars(v)
+            elif k == 'target_vars':
+                agent.setTargetVars(v)
             else:
                 raise Exception()
         _vars_lock.release()
@@ -55,12 +47,7 @@ def func_train_process(_create_agent_func, _port,
 
     def upload_grads():
         _grads_lock.acquire()
-        if agent.v_vars:
-            setGrads('v_func', agent.v_grads_data)
-        if agent.q_vars:
-            setGrads('q_func', agent.q_grads_data)
-        if agent.p_vars:
-            setGrads('p_func', agent.p_grads_data)
+        setGrads('grads', agent.grads_data)
         socket.send('grads')
         socket.recv()
         _grads_lock.release()
@@ -90,7 +77,7 @@ class AsynTrain(object):
                  _step_update_func=5,
                  _step_update_target=1e3,
                  _step_save=1e6,
-                 _v_opt=None, _q_opt=None, _p_opt=None):
+                 _opt=None):
         # create socket to connect actors
         context = zmq.Context()
         self.socket = context.socket(zmq.REP)
@@ -113,12 +100,8 @@ class AsynTrain(object):
 
         # create agent, and create optimizer
         self.agent = _create_agent_func()
-        if _v_opt is not None:
-            self.agent.createVOpt(_v_opt)
-        if _q_opt is not None:
-            self.agent.createQOpt(_q_opt)
-        if _p_opt is not None:
-            self.agent.createPOpt(_p_opt)
+        if _opt is not None:
+            self.agent.createOpt(_opt)
 
         self.agent.sess.run(tf.initialize_all_variables())
         self.agent.updateTargetFunc()
@@ -150,21 +133,10 @@ class AsynTrain(object):
                 array = sa.create(array_name, _data_list[i].shape, np.float32)
                 self.shared_grads_dict[_name].append(array)
 
-        if self.agent.v_vars:
-            createSharedVars('v_func', self.agent.getVFunc())
-            createSharedGrads('v_func', self.agent.getVFunc())
-        if self.agent.q_vars:
-            createSharedVars('q_func', self.agent.getQFunc())
-            createSharedGrads('q_func', self.agent.getQFunc())
-        if self.agent.p_vars:
-            createSharedVars('p_func', self.agent.getPFunc())
-            createSharedGrads('p_func', self.agent.getPFunc())
-        if self.agent.target_v_vars:
-            createSharedVars('target_v_func', self.agent.getTargetVFunc())
-        if self.agent.target_q_vars:
-            createSharedVars('target_q_func', self.agent.getTargetQFunc())
-        if self.agent.target_p_vars:
-            createSharedVars('target_p_func', self.agent.getTargetPFunc())
+        createSharedVars('vars', self.agent.getVars())
+        createSharedGrads('grads', self.agent.getVars())
+        if self.agent.target_vars:
+            createSharedVars('target_vars', self.agent.getTargetVars())
 
         self.step_total = 0
         self.step_update_target = _step_update_target
@@ -188,12 +160,8 @@ class AsynTrain(object):
                     # if update target
                     self.vars_lock.acquire()
                     self.agent.updateTargetFunc()
-                    if self.agent.target_v_vars:
-                        setVars('target_v_func', self.agent.getTargetVFunc())
-                    if self.agent.target_q_vars:
-                        setVars('target_q_func', self.agent.getTargetQFunc())
-                    if self.agent.target_p_vars:
-                        setVars('target_p_func', self.agent.getTargetPFunc())
+                    if self.agent.target_vars:
+                        setVars('target_vars', self.agent.getTargetVars())
                     self.vars_lock.release()
                 self.socket.send('ack')
                 if self.step_total % self.step_save == 0:
@@ -202,21 +170,12 @@ class AsynTrain(object):
             elif cmd == 'grads':
                 # get grads and update model
                 for k, g in zip(self.shared_grads_dict.keys(), self.shared_grads_dict.values()):
-                    if k == 'v_func':
-                        self.agent.v_grads_data = g
-                    if k == 'q_func':
-                        self.agent.q_grads_data = g
-                    if k == 'p_func':
-                        self.agent.p_grads_data = g
+                    if k == 'grads':
+                        self.agent.grads_data = g
                 self.agent.update()
 
                 self.vars_lock.acquire()
-                if self.agent.v_vars:
-                    setVars('v_func', self.agent.getVFunc())
-                if self.agent.q_vars:
-                    setVars('q_func', self.agent.getQFunc())
-                if self.agent.p_vars:
-                    setVars('p_func', self.agent.getPFunc())
+                setVars('vars', self.agent.getVars())
                 self.vars_lock.release()
 
                 self.socket.send('ack')

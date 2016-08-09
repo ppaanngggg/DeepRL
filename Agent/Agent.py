@@ -52,43 +52,30 @@ class Agent(object):
 
         # alloc all models
         self.v_func = None
-        self.v_vars = None
-        self.set_v_vars_op = None
-        self.set_v_vars_place = None
-        self.v_grads_data = None
-        self.v_grads_place = None
         self.target_v_func = None
-        self.target_v_vars = None
-        self.set_target_v_vars_op = None
-        self.set_target_v_vars_place = None
 
         self.q_func = None
-        self.q_vars = None
-        self.set_q_vars_op = None
-        self.set_q_vars_place = None
-        self.q_grads_data = None
-        self.q_grads_place = None
         self.target_q_func = None
-        self.target_q_vars = None
-        self.set_target_q_vars_op = None
-        self.set_target_q_vars_place = None
 
         self.p_func = None
-        self.p_vars = None
-        self.set_p_vars_op = None
-        self.set_p_vars_place = None
-        self.p_grads_data = None
-        self.p_grads_place = None
         self.target_p_func = None
-        self.target_p_vars = None
-        self.set_target_p_vars_op = None
-        self.set_target_p_vars_place = None
 
-        # alloc all optimizers
-        self.v_opt = None
-        self.q_opt = None
-        self.p_opt = None
+        # alloc train part
+        self.vars = None
+        self.set_vars_op = None
+        self.set_vars_place = None
 
+        self.target_vars = None
+        self.set_target_vars_op = None
+        self.set_target_vars_place = None
+
+        self.grads_data = None
+        self.grads_place = None
+
+        # alloc opt
+        self.opt = None
+
+        # alloc env
         self.env = None
 
         # is train
@@ -102,62 +89,22 @@ class Agent(object):
         with tf.device(self.config.device):
             self.x_place = tf.placeholder(tf.float32)
 
-    def createVOpt(self, _opt):
-        self.v_grads_place = [
-            tf.placeholder(tf.float32) for _ in self.v_vars
+    def createOpt(self, _opt):
+        self.grads_place = [
+            tf.placeholder(tf.float32) for _ in self.vars
         ]
-        self.v_opt = _opt.apply_gradients([
-            (p, v) for p, v in zip(
-                self.v_grads_place, self.v_vars)
+        self.opt = _opt.apply_gradients([
+            (p, v) for p, v in zip(self.grads_place, self.vars)
         ])
 
-    def createQOpt(self, _opt):
-        # if opt exist, then update vars
-        self.q_grads_place = [
-            tf.placeholder(tf.float32) for _ in self.q_vars
-        ]
-        self.q_opt = _opt.apply_gradients([
-            (p, v) for p, v in zip(
-                self.q_grads_place, self.q_vars)
-        ])
-
-    def createPOpt(self, _opt):
-        self.p_grads_place = [
-            tf.placeholder(tf.float32) for _ in self.p_vars
-        ]
-        self.p_opt = _opt.apply_gradients([
-            (p, v) for p, v in zip(
-                self.p_grads_place, self.p_vars)
-        ])
-
-    def getVFunc(self):
-        if self.v_vars:
-            return self.sess.run(self.v_vars)
+    def getVars(self):
+        if self.vars:
+            return self.sess.run(self.vars)
         return None
 
-    def getTargetVFunc(self):
-        if self.target_v_vars:
-            return self.sess.run(self.target_v_vars)
-        return None
-
-    def getQFunc(self):
-        if self.q_vars:
-            return self.sess.run(self.q_vars)
-        return None
-
-    def getTargetQFunc(self):
-        if self.target_q_vars:
-            return self.sess.run(self.target_q_vars)
-        return None
-
-    def getPFunc(self):
-        if self.p_vars:
-            return self.sess.run(self.p_vars)
-        return None
-
-    def getTargetPFunc(self):
-        if self.target_p_vars:
-            return self.sess.run(self.target_p_vars)
+    def getTargetVars(self):
+        if self.target_vars:
+            return self.sess.run(self.target_vars)
         return None
 
     def createSetOpPlace(self, _vars):
@@ -171,67 +118,26 @@ class Agent(object):
             tmp[p] = d
         return tmp
 
-    def setVFunc(self, _data):
-        if self.v_vars:
-            if self.set_v_vars_op is None and self.set_v_vars_place is None:
-                self.set_v_vars_op, self.set_v_vars_place = \
-                    self.createSetOpPlace(self.v_vars)
+    def setVars(self, _data):
+        if self.vars:
+            if self.set_vars_op is None and self.set_vars_place is None:
+                self.set_vars_op, self.set_vars_place = \
+                    self.createSetOpPlace(self.vars)
             self.sess.run(
-                self.set_v_vars_op,
-                feed_dict=self.createSetFeedDict(self.set_v_vars_place, _data)
-            )
-
-    def setTargetVFunc(self, _data):
-        if self.target_v_vars:
-            if self.set_target_v_vars_op is None and self.set_target_v_vars_place is None:
-                self.set_target_v_vars_op, self.set_target_v_vars_place  = \
-                    self.createSetOpPlace(self.target_v_vars)
-            self.sess.run(
-                self.set_target_v_vars_op,
+                self.set_vars_op,
                 feed_dict=self.createSetFeedDict(
-                    self.set_target_v_vars_place, _data)
+                    self.set_vars_place, _data)
             )
 
-    def setQFunc(self, _data):
-        if self.q_vars:
-            if self.set_q_vars_op is None and self.set_q_vars_place is None:
-                self.set_q_vars_op, self.set_q_vars_place = \
-                    self.createSetOpPlace(self.q_vars)
+    def setTargetVars(self, _data):
+        if self.target_vars:
+            if self.set_target_vars_op is None and self.set_target_vars_place is None:
+                self.set_target_vars_op, self.set_target_vars_place = \
+                    self.createSetOpPlace(self.target_vars)
             self.sess.run(
-                self.set_q_vars_op,
-                feed_dict=self.createSetFeedDict(self.set_q_vars_place, _data)
-            )
-
-    def setTargetQFunc(self, _data):
-        if self.target_q_vars:
-            if self.set_target_q_vars_op is None and self.set_target_q_vars_place is None:
-                self.set_target_q_vars_op, self.set_target_q_vars_place = \
-                    self.createSetOpPlace(self.target_q_vars)
-            self.sess.run(
-                self.set_target_q_vars_op,
+                self.set_target_vars_op,
                 feed_dict=self.createSetFeedDict(
-                    self.set_target_q_vars_place, _data)
-            )
-
-    def setPFunc(self, _data):
-        if self.p_vars:
-            if self.set_p_vars_op is None and self.set_p_vars_place is None:
-                self.set_p_vars_op, self.set_p_vars_place = \
-                    self.createSetOpPlace(self.p_vars)
-            self.sess.run(
-                self.set_p_vars_op,
-                feed_dict=self.createSetFeedDict(self.set_p_vars_place, _data)
-            )
-
-    def setTargetPFunc(self, _data):
-        if self.target_p_vars:
-            if self.set_target_p_vars_op is None and self.set_target_p_vars_place is None:
-                self.set_target_p_vars_op, self.set_target_p_vars_place = \
-                    self.createSetOpPlace(self.target_p_vars)
-            self.sess.run(
-                self.set_target_p_vars_op,
-                feed_dict=self.createSetFeedDict(
-                    self.set_target_p_vars_place, _data)
+                    self.set_target_vars_place, _data)
             )
 
     def training(self):
@@ -334,20 +240,14 @@ class Agent(object):
 
     def update(self):
         # if has optimizers, then update model
-        def apply_grads(_opt, _func, _places, _vars, _grads):
-            if _opt is not None and _func is not None \
-                    and _places and _vars and _grads:
+        def apply_grads(_opt, _places, _vars, _grads):
+            if _opt is not None and _places and _vars and _grads:
                 tmp = {}
                 for p, g in zip(_places, _grads):
                     tmp[p] = g
                 self.sess.run(_opt, feed_dict=tmp)
         with tf.device(self.config.device):
-            apply_grads(self.v_opt, self.v_func, self.v_grads_place,
-                        self.v_vars, self.v_grads_data)
-            apply_grads(self.q_opt, self.q_func, self.q_grads_place,
-                        self.q_vars, self.q_grads_data)
-            apply_grads(self.p_opt, self.p_func, self.p_grads_place,
-                        self.p_vars, self.p_grads_data)
+            apply_grads(self.opt, self.grads_place, self.vars, self.grads_data)
 
     def doTrain(self, _batch_tuples, _weights):
         """
@@ -448,12 +348,8 @@ class Agent(object):
         """
         logger.info('update target func')
         with tf.device(self.config.device):
-            if self.v_vars and self.target_v_vars:
-                self.setTargetVFunc(self.getVFunc())
-            if self.q_vars and self.target_q_vars:
-                self.setTargetQFunc(self.getQFunc())
-            if self.p_vars and self.target_p_vars:
-                self.setTargetPFunc(self.getPFunc())
+            if self.vars and self.target_vars:
+                self.setTargetVars(self.getVars())
 
     def updateEpsilon(self):
         """
@@ -490,21 +386,12 @@ class Agent(object):
     def save(self, _epoch, _step):
         filename = './models/epoch_' + str(_epoch) + '_step_' + str(_step)
         logger.info(filename)
-        if self.v_vars:
-            np.save(filename + '_v_func', self.getVFunc())
-        if self.q_vars:
-            np.save(filename + '_q_func', self.getQFunc())
-        if self.p_vars:
-            np.save(filename + '_p_func', self.getPFunc())
+        with tf.device(self.config.device):
+            np.save(filename, self.getVars())
 
     def load(self, filename):
         logger.info(filename)
         with tf.device(self.config.device):
-            if self.v_vars:
-                self.setVFunc(np.load(filename + '_v_func.npy'))
-            if self.q_vars:
-                self.setQFunc(np.load(filename + '_q_func.npy'))
-            if self.p_vars:
-                self.setPFunc(np.load(filename + '_p_func.npy'))
+            self.setVars(np.load(filename))
 
         self.updateTargetFunc()

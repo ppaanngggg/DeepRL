@@ -41,11 +41,11 @@ class QAgent(Agent):
 
         with tf.device(self.config.device):
             # create q func
-            self.q_func, self.q_vars = _model(self.x_place)
+            self.q_func, self.vars = _model(self.x_place)
 
             if self.is_train:
                 # create target q func
-                self.target_q_func, self.target_q_vars = _model(self.x_place)
+                self.target_q_func, self.target_vars = _model(self.x_place)
                 # place for action(one hot), target, weight
                 self.action_place = tf.placeholder(tf.float32)
                 self.target_place = tf.placeholder(tf.float32)
@@ -60,10 +60,10 @@ class QAgent(Agent):
                 # get total loss, mul with weight, if weight exist
                 loss = tf.reduce_mean(self.err_list_op * self.weight_place)
                 # compute grads of vars
-                self.grads_op = tf.gradients(loss, self.q_vars)
+                self.grads_op = tf.gradients(loss, self.vars)
 
                 if _optimizer:
-                    self.createQOpt(_optimizer)
+                    self.createOpt(_optimizer)
 
                 self.replay = _replay
 
@@ -119,7 +119,7 @@ class QAgent(Agent):
                 }
             )
             # set grads data
-            self.q_grads_data = ret[1:]
+            self.grads_data = ret[1:]
         # return err_list
         return ret[0]
 
