@@ -9,10 +9,10 @@ class NStepAACAgent(AACAgent):
     Asynchronous Methods for Deep Reinforcement Learning
 
     Args:
-        _actor (function): necessary, head part of p func,
-                        output's dim should be equal with num of actions
-        _critic (function): necessary, head part of v func,
-                        output's dim should 1
+        _model (function): necessary
+            return: 1. p func output op, output's dim should be equal with num of actions
+                    2. v func output op, output's dim should 1
+                    2. vars list
         _env (Env): necessary, env to learn, should be rewritten from Env
         _is_train (bool): default True
         _actor_optimizer (chainer.optimizers): not necessary, opter for actor,

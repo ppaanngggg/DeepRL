@@ -26,7 +26,7 @@ class QAgent(Agent):
     """
 
     def __init__(self, _model, _env, _is_train=True,
-                 _optimizer=None, _replay=None,
+                 _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
                  _grad_clip=None, _epoch_show_log=1e3):
@@ -69,7 +69,7 @@ class QAgent(Agent):
                 self.grads_op = tf.gradients(loss, self.vars)
 
                 if _optimizer:
-                    self.createOpt(_optimizer)
+                    self.createOpt(_optimizer, _global_step)
 
                 self.replay = _replay
 
