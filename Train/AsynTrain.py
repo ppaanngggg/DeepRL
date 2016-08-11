@@ -73,11 +73,13 @@ def func_train_process(_create_agent_func, _port,
 
 class AsynTrain(object):
 
-    def __init__(self, _create_agent_func, _process_num=8,
+    def __init__(self, _create_agent_func,
+                 _opt, _global_step=None,
+                 _process_num=8,
                  _step_update_func=5,
                  _step_update_target=1e3,
-                 _step_save=1e6,
-                 _opt=None):
+                 _step_save=1e6
+                 ):
         # create socket to connect actors
         context = zmq.Context()
         self.socket = context.socket(zmq.REP)
@@ -100,8 +102,7 @@ class AsynTrain(object):
 
         # create agent, and create optimizer
         self.agent = _create_agent_func()
-        if _opt is not None:
-            self.agent.createOpt(_opt)
+        self.agent.createOpt(_opt, _global_step)
 
         self.agent.sess.run(tf.initialize_all_variables())
         self.agent.updateTargetFunc()
@@ -171,6 +172,7 @@ class AsynTrain(object):
                 # get grads and update model
                 for k, g in zip(self.shared_grads_dict.keys(), self.shared_grads_dict.values()):
                     if k == 'grads':
+                        # raw_input()
                         self.agent.grads_data = g
                 self.agent.update()
 
@@ -188,7 +190,7 @@ class AsynTrain(object):
                 print '[[[ interrupted ]]]'
                 s = sys.stdin.readline().strip()
                 while True:
-                    print '[[[ Please input (save, continue, quit, ...) ]]]'
+                    print '[[[ Please input (save, continue, quit, grad, ...) ]]]'
                     s = sys.stdin.readline().strip()
                     if s == 'save':
                         self.agent.save("", self.step_total)
@@ -204,6 +206,8 @@ class AsynTrain(object):
                             for n in names:
                                 sa.delete(n)
                         return
+                    elif s == 'grad':
+                        print self.agent.grads_data
                     else:
                         print '[[[ unknow cmd... ]]]'
                         pass

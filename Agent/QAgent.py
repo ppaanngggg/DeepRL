@@ -29,9 +29,18 @@ class QAgent(Agent):
                  _optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
-                 _grad_clip=1., _epoch_show_log=1e3):
+                 _grad_clip=None, _epoch_show_log=1e3):
 
         super(QAgent, self).__init__(_is_train, _gpu)
+
+        # set config
+        self.config.gamma = _gamma
+        self.config.batch_size = _batch_size
+        self.config.epsilon = _epsilon
+        self.config.epsilon_decay = _epsilon_decay
+        self.config.epsilon_underline = _epsilon_underline
+        self.config.grad_clip = _grad_clip
+        self.config.epoch_show_log = _epoch_show_log
 
         # set env
         self.env = _env
@@ -68,14 +77,6 @@ class QAgent(Agent):
             self.sess.run(tf.initialize_all_variables())
             # copy params from q func to target
             self.updateTargetFunc()
-
-        self.config.gamma = _gamma
-        self.config.batch_size = _batch_size
-        self.config.epsilon = _epsilon
-        self.config.epsilon_decay = _epsilon_decay
-        self.config.epsilon_underline = _epsilon_underline
-        self.config.grad_clip = _grad_clip
-        self.config.epoch_show_log = _epoch_show_log
 
     def step(self):
         """

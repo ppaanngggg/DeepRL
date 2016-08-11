@@ -25,12 +25,20 @@ class AACAgent(Agent):
     """
 
     def __init__(self, _model, _env, _is_train=True,
-                 _optimizer=None, _replay=None,
+                 _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99,
                  _batch_size=32, _beta_entropy=0.01,
-                 _grad_clip=1., _epoch_show_log=1e3):
+                 _grad_clip=None, _epoch_show_log=1e3):
 
         super(AACAgent, self).__init__(_is_train, _gpu)
+
+        # set config
+        self.config.gpu = _gpu
+        self.config.gamma = _gamma
+        self.config.batch_size = _batch_size
+        self.config.beta_entropy = _beta_entropy
+        self.config.grad_clip = _grad_clip
+        self.config.epoch_show_log = _epoch_show_log
 
         # set env
         self.env = _env
@@ -58,12 +66,12 @@ class AACAgent(Agent):
                         tf.reduce_sum(self.p_func * self.action_place, 1)
                         + 1e-10
                     ) * diff_op
-                ) + _beta_entropy * entropy + tf.reduce_mean(self.err_list_op * self.weight_place)
+                ) + self.config.beta_entropy * entropy + 0.5 * tf.reduce_mean(self.err_list_op * self.weight_place)
                 # compute grads of vars
                 self.grads_op = tf.gradients(loss, self.vars)
 
                 if _optimizer:
-                    self.createOpt(_optimizer)
+                    self.createOpt(_optimizer, _global_step)
 
                 self.replay = _replay
 
@@ -71,13 +79,6 @@ class AACAgent(Agent):
             self.sess.run(tf.initialize_all_variables())
             # copy params from q func to target
             self.updateTargetFunc()
-
-        self.config.gpu = _gpu
-        self.config.gamma = _gamma
-        self.config.batch_size = _batch_size
-        self.config.beta_entropy = _beta_entropy
-        self.config.grad_clip = _grad_clip
-        self.config.epoch_show_log = _epoch_show_log
 
     def step(self):
         """

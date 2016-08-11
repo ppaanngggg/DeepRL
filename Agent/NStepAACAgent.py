@@ -27,14 +27,14 @@ class NStepAACAgent(AACAgent):
         _grad_clip (float): clip grad, 0 is no clip
     """
 
-    def __init__(self, _actor, _critic, _env, _is_train=True,
-                 _actor_optimizer=None, _critic_optimizer=None, _replay=None,
+    def __init__(self, _model, _env, _is_train=True,
+                 _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32, _step_len=5,
-                 _beta_entropy=0.01, _grad_clip=1., _epoch_show_log=1e3):
+                 _beta_entropy=0.01, _grad_clip=None, _epoch_show_log=1e3):
 
         super(NStepAACAgent, self).__init__(
-            _actor, _critic, _env, _is_train,
-            _actor_optimizer, _critic_optimizer, _replay,
+            _model, _env, _is_train,
+            _optimizer, _global_step, _replay,
             _gpu, _gamma, _batch_size, _beta_entropy, _grad_clip,
             _epoch_show_log
         )
@@ -46,41 +46,30 @@ class NStepAACAgent(AACAgent):
         Returns:
             still in game or not
         """
-        return super(NStepAACAgent, self).nstep(self.softmax_op)
+        return super(NStepAACAgent, self).nstep(self.p_func)
 
     def grad(self, _cur_x, _next_output, _batch_tuples, _weights):
         with tf.device(self.config.device):
-            # critic part
+            # get action data (one hot)
+            action_data = self.getActionData(
+                self.p_func.get_shape().as_list()[1], _batch_tuples)
             # get target data
             target_data = self.getNStepVTargetData(_next_output, _batch_tuples)
             # get weight data
             weight_data = self.getWeightData(_weights, _batch_tuples)
             # get diff [0], err list [1] and grads [2:]
             ret = self.sess.run(
-                [self.diff_op, self.err_list_op] + self.critic_grads_op,
+                [self.err_list_op] + self.grads_op,
                 feed_dict={
                     self.x_place: _cur_x,
+                    self.action_place: action_data,
                     self.target_place: target_data,
                     self.weight_place: weight_data,
                 }
             )
-            diff_data = ret[0]
-            err_list = ret[1]
-            # set v grads data
-            self.v_grads_data = ret[2:]
+            err_list = ret[0]
+            # set grads data
+            self.grads_data = ret[1:]
 
-            # actor part
-            # get action data (one hot)
-            action_data = self.getActionData(
-                self.softmax_op.get_shape().as_list()[1], _batch_tuples)
-            # set p grad data
-            self.p_grads_data = self.sess.run(
-                self.actor_grads_op,
-                feed_dict={
-                    self.x_place: _cur_x,
-                    self.action_place: action_data,
-                    self.diff_place: diff_data,
-                }
-            )
         # return err_list
         return err_list

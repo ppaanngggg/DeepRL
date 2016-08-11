@@ -94,13 +94,21 @@ class Agent(object):
         # count new game times
         self.epoch = 0
 
-    def createOpt(self, _opt):
+    def createOpt(self, _opt, _global_step):
         self.grads_place = [
             tf.placeholder(tf.float32) for _ in self.vars
         ]
+        if self.config.grad_clip:
+            grads_op = [
+                tf.clip_by_value(
+                    d, -self.config.grad_clip, self.config.grad_clip)
+                for d in self.grads_place
+            ]
+        else:
+            grads_op = self.grads_place
         self.opt = _opt.apply_gradients([
-            (p, v) for p, v in zip(self.grads_place, self.vars)
-        ])
+            (p, v) for p, v in zip(grads_op, self.vars)
+        ], global_step=_global_step)
 
     def getVars(self):
         if self.vars:
