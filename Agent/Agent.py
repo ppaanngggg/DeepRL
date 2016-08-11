@@ -39,6 +39,8 @@ class Config(object):
         # beta of entropy
         self.beta_entropy = None
 
+        self.epoch_show_log = None
+
 
 class Agent(object):
     """
@@ -88,6 +90,9 @@ class Agent(object):
         # set place for x
         with tf.device(self.config.device):
             self.x_place = tf.placeholder(tf.float32)
+
+        # count new game times
+        self.epoch = 0
 
     def createOpt(self, _opt):
         self.grads_place = [
@@ -157,8 +162,10 @@ class Agent(object):
         normal start new game, suitable for most agent
         """
         while not self.env.in_game:
-            logger.info('Env not in game')
             self.env.startNewGame()
+        self.epoch += 1
+        if self.epoch % self.config.epoch_show_log == 0:
+            logger.info('start new game')
 
     def step(self, _model):
         """
@@ -177,7 +184,8 @@ class Agent(object):
         # do action and get reward
         reward = self.env.doAction(action)
 
-        logger.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
+        if self.epoch % self.config.epoch_show_log == 0:
+            logger.info('Action: ' + str(action) + '; Reward: %.3f' % (reward))
 
         if self.is_train:
             # get new state
@@ -207,8 +215,9 @@ class Agent(object):
                 action_list.append(action)
                 reward = self.env.doAction(action)
                 reward_list.append(reward)
-                logger.info(
-                    'Action: ' + str(action) + '; Reward: %.3f' % (reward))
+                if self.epoch % self.config.epoch_show_log == 0:
+                    logger.info(
+                        'Action: ' + str(action) + '; Reward: %.3f' % (reward))
                 next_state = self.env.getState()
                 if not self.env.in_game:
                     break
@@ -375,12 +384,25 @@ class Agent(object):
                 # use model to choose
                 x_data = self.env.getX(_state)
                 output = self.func(_model, x_data, False)
-                logger.info(str(output))
+                if self.epoch % self.config.epoch_show_log == 0:
+                    logger.info(str(output))
                 return self.env.getBestAction(output, [_state])[0]
         else:
             x_data = self.env.getX(_state)
             output = self.func(_model, x_data, False)
             logger.info(str(output))
+            return self.env.getBestAction(output, [_state])[0]
+
+    def chooseSoftAction(self, _model, _state):
+        x_data = self.env.getX(_state)
+        output = self.func(_model, x_data, False)
+
+        if self.is_train:
+            if self.epoch % self.config.epoch_show_log == 0:
+                logger.info(output)
+            return self.env.getSoftAction(output, [_state])[0]
+        else:
+            logger.info(output)
             return self.env.getBestAction(output, [_state])[0]
 
     def save(self, _epoch, _step):

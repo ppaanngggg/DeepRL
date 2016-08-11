@@ -2,9 +2,6 @@ import logging
 import sys
 from select import select
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
 
 class Train(object):
 
@@ -29,8 +26,6 @@ class Train(object):
             while self.agent.step():
                 self.step_local += 1
                 self.step_count += 1
-                logger.info('Epoch: ' + str(self.epoch) +
-                            ' Step: ' + str(self.step_local))
                 if not self.step_count % self.step_train:
                     self.agent.train()
                 if not self.step_count % self.step_update_target:

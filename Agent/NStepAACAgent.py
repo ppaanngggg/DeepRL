@@ -3,10 +3,6 @@ import random
 import tensorflow as tf
 import numpy as np
 
-import logging
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
 
 class NStepAACAgent(AACAgent):
     """
@@ -34,12 +30,13 @@ class NStepAACAgent(AACAgent):
     def __init__(self, _actor, _critic, _env, _is_train=True,
                  _actor_optimizer=None, _critic_optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32, _step_len=5,
-                 _beta_entropy=0.01, _grad_clip=1.):
+                 _beta_entropy=0.01, _grad_clip=1., _epoch_show_log=1e3):
 
         super(NStepAACAgent, self).__init__(
             _actor, _critic, _env, _is_train,
             _actor_optimizer, _critic_optimizer, _replay,
-            _gpu, _gamma, _batch_size, _beta_entropy, _grad_clip
+            _gpu, _gamma, _batch_size, _beta_entropy, _grad_clip,
+            _epoch_show_log
         )
 
         self.config.step_len = _step_len

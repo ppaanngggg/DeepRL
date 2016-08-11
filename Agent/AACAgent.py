@@ -3,10 +3,6 @@ import random
 import tensorflow as tf
 import numpy as np
 
-import logging
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
 
 class AACAgent(Agent):
     """
@@ -32,7 +28,7 @@ class AACAgent(Agent):
                  _optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99,
                  _batch_size=32, _beta_entropy=0.01,
-                 _grad_clip=1.):
+                 _grad_clip=1., _epoch_show_log=1e3):
 
         super(AACAgent, self).__init__(_is_train, _gpu)
 
@@ -57,7 +53,7 @@ class AACAgent(Agent):
                 entropy = tf.reduce_sum(
                     self.p_func * tf.log(self.p_func + 1e-10))
                 # get loss
-                loss = tf.reduce_sum(
+                loss = -tf.reduce_sum(
                     tf.log(
                         tf.reduce_sum(self.p_func * self.action_place, 1)
                         + 1e-10
@@ -81,6 +77,7 @@ class AACAgent(Agent):
         self.config.batch_size = _batch_size
         self.config.beta_entropy = _beta_entropy
         self.config.grad_clip = _grad_clip
+        self.config.epoch_show_log = _epoch_show_log
 
     def step(self):
         """
@@ -133,10 +130,4 @@ class AACAgent(Agent):
         return err_list
 
     def chooseAction(self, _model, _state):
-        x_data = self.env.getX(_state)
-        output = self.func(_model, x_data, False)
-        logger.info(output)
-        if self.is_train:
-            return self.env.getSoftAction(output, [_state])[0]
-        else:
-            return self.env.getBestAction(output, [_state])[0]
+        return self.chooseSoftAction(_model, _state)

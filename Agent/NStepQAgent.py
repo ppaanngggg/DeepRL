@@ -3,10 +3,6 @@ import random
 import tensorflow as tf
 import numpy as np
 
-import logging
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
 
 class NStepQAgent(QAgent):
     """
@@ -34,13 +30,13 @@ class NStepQAgent(QAgent):
                  _optimizer=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32, _step_len=5,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
-                 _grad_clip=1.):
+                 _grad_clip=1., _epoch_show_log=1e3):
 
         super(NStepQAgent, self).__init__(
             _model, _env, _is_train, _optimizer, _replay,
             _gpu, _gamma, _batch_size,
             _epsilon, _epsilon_decay, _epsilon_underline,
-            _grad_clip)
+            _grad_clip, _epoch_show_log)
 
         self.config.step_len = _step_len
 
