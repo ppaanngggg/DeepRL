@@ -26,7 +26,9 @@ class Config(object):
         self.epsilon = None
         self.epsilon_decay = None
         self.epsilon_underline = None
-        # where to clip grad
+        # whether to clip err
+        self.err_clip = None
+        # whether to clip grad
         self.grad_clip = None
         # bootstrapped, num of heads
         self.K = None

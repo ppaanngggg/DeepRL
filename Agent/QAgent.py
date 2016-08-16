@@ -29,7 +29,7 @@ class QAgent(Agent):
                  _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32,
                  _epsilon=0.5, _epsilon_decay=0.995, _epsilon_underline=0.01,
-                 _grad_clip=None, _epoch_show_log=1e3):
+                 _err_clip=None, _grad_clip=None, _epoch_show_log=1e3):
 
         super(QAgent, self).__init__(_is_train, _gpu)
 
@@ -39,6 +39,7 @@ class QAgent(Agent):
         self.config.epsilon = _epsilon
         self.config.epsilon_decay = _epsilon_decay
         self.config.epsilon_underline = _epsilon_underline
+        self.config.err_clip = _err_clip
         self.config.grad_clip = _grad_clip
         self.config.epoch_show_log = _epoch_show_log
 
@@ -63,8 +64,16 @@ class QAgent(Agent):
                 # get err of cur action value and target value
                 self.err_list_op = 0.5 * \
                     tf.square(action_value - self.target_place)
+                # clipped err
+                if self.config.err_clip:
+                    self.clipped_err_op = tf.clip_by_value(
+                        self.err_list_op,
+                        -self.config.err_clip, self.config.err_clip
+                    )
+                else:
+                    self.clipped_err_op = self.err_list_op
                 # get total loss, mul with weight, if weight exist
-                loss = tf.reduce_mean(self.err_list_op * self.weight_place)
+                loss = tf.reduce_mean(self.clipped_err_op * self.weight_place)
                 # compute grads of vars
                 self.grads_op = tf.gradients(loss, self.vars)
 
@@ -118,7 +127,7 @@ class QAgent(Agent):
                 }
             )
             # set grads data
-            self.grads_data = ret[1:]
+            self.grads_data = ret[2:]
         # return err_list
         return ret[0]
 
