@@ -127,7 +127,7 @@ class QAgent(Agent):
                 }
             )
             # set grads data
-            self.grads_data = ret[2:]
+            self.grads_data = ret[1:]
         # return err_list
         return ret[0]
 

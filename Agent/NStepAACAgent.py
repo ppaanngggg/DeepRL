@@ -30,13 +30,14 @@ class NStepAACAgent(AACAgent):
     def __init__(self, _model, _env, _is_train=True,
                  _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99, _batch_size=32, _step_len=5,
-                 _beta_entropy=0.01, _grad_clip=None, _epoch_show_log=1e3):
+                 _beta_entropy=0.01, _err_clip=None, _grad_clip=None,
+                 _epoch_show_log=1e3):
 
         super(NStepAACAgent, self).__init__(
             _model, _env, _is_train,
             _optimizer, _global_step, _replay,
-            _gpu, _gamma, _batch_size, _beta_entropy, _grad_clip,
-            _epoch_show_log
+            _gpu, _gamma, _batch_size, _beta_entropy,
+            _err_clip, _grad_clip, _epoch_show_log
         )
 
         self.config.step_len = _step_len

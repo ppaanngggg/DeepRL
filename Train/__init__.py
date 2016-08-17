@@ -1,2 +1,2 @@
 from Train import Train
-# from AsynTrain import AsynTrain
+from AsynTrain import AsynTrain

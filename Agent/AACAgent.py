@@ -28,7 +28,7 @@ class AACAgent(Agent):
                  _optimizer=None, _global_step=None, _replay=None,
                  _gpu=False, _gamma=0.99,
                  _batch_size=32, _beta_entropy=0.01,
-                 _grad_clip=None, _epoch_show_log=1e3):
+                 _err_clip=None, _grad_clip=None, _epoch_show_log=1e3):
 
         super(AACAgent, self).__init__(_is_train, _gpu)
 
@@ -37,6 +37,7 @@ class AACAgent(Agent):
         self.config.gamma = _gamma
         self.config.batch_size = _batch_size
         self.config.beta_entropy = _beta_entropy
+        self.config.err_clip = _err_clip
         self.config.grad_clip = _grad_clip
         self.config.epoch_show_log = _epoch_show_log
 
@@ -55,6 +56,14 @@ class AACAgent(Agent):
                 diff_op = self.target_place - tf.reshape(self.v_func, [-1])
                 # get err of value and target
                 self.err_list_op = 0.5 * tf.square(diff_op)
+                # clipped err
+                if self.config.err_clip:
+                    self.clipped_err_op = tf.clip_by_value(
+                        self.err_list_op,
+                        -self.config.err_clip, self.config.err_clip
+                    )
+                else:
+                    self.clipped_err_op = self.err_list_op
                 # place for action, diff
                 self.action_place = tf.placeholder(tf.float32)
                 # get entropy
@@ -64,9 +73,10 @@ class AACAgent(Agent):
                 loss = -tf.reduce_sum(
                     tf.log(
                         tf.reduce_sum(self.p_func * self.action_place, 1)
-                        + 1e-10
-                    ) * diff_op
-                ) + self.config.beta_entropy * entropy + 0.5 * tf.reduce_mean(self.err_list_op * self.weight_place)
+                        + 1e-10) * diff_op) + \
+                    self.config.beta_entropy * entropy + \
+                    0.5 * tf.reduce_mean(self.clipped_err_op *
+                                         self.weight_place)
                 # compute grads of vars
                 self.grads_op = tf.gradients(loss, self.vars)
 
