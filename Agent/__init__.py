@@ -5,3 +5,4 @@ from AACAgent import AACAgent
 from QACAgent import QACAgent
 from NStepQAgent import NStepQAgent
 from NStepAACAgent import NStepAACAgent
+from PGAgent import PGAgent

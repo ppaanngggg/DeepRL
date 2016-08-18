@@ -240,6 +240,39 @@ class Agent(object):
         else:
             return self.step(_model)
 
+    def stepUntilEnd(self, _model):
+        """
+        Returns:
+            still in game or not
+        """
+        if self.is_train:
+            if not self.env.in_game:
+                return False
+
+            state_list = []
+            action_list = []
+            reward_list = []
+
+            cur_state = self.env.getState()
+            while self.env.in_game:
+                state_list.append(cur_state)
+                action = self.chooseAction(_model, cur_state)
+                action_list.append(action)
+                reward = self.env.doAction(action)
+                reward_list.append(reward)
+                if self.epoch % self.config.epoch_show_log == 0:
+                    logger.info(
+                        'Action: ' + str(action) + '; Reward: %.3f' % (reward))
+                next_state = self.env.getState()
+                cur_state = next_state
+
+            for i in range(len(state_list)):
+                self.replay.push(
+                    state_list[i], action_list[i], reward_list[i:], next_state)
+            return self.env.in_game
+        else:
+            return self.step(_model)
+
     def train(self):
         """
         train model

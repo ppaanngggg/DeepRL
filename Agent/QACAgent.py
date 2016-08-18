@@ -91,8 +91,6 @@ class QACAgent(Agent):
 
             # init all vars
             self.sess.run(tf.initialize_all_variables())
-            # copy params from q func to target
-            self.updateTargetFunc()
 
         self.config.gpu = _gpu
         self.config.gamma = _gamma

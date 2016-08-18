@@ -87,8 +87,6 @@ class AACAgent(Agent):
 
             # init all vars
             self.sess.run(tf.initialize_all_variables())
-            # copy params from q func to target
-            self.updateTargetFunc()
 
     def step(self):
         """

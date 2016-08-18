@@ -23,7 +23,9 @@ class Train(object):
             self.agent.startNewGame()
             self.epoch += 1
             self.step_local = 0
-            while self.agent.step():
+            in_game = True
+            while in_game:
+                in_game = self.agent.step()
                 self.step_local += 1
                 self.step_count += 1
                 if not self.step_count % self.step_train:
