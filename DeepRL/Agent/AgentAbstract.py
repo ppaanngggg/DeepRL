@@ -136,20 +136,20 @@ class AgentAbstract:
             random_value = random.random()
             if random_value < self.config.epsilon:
                 # randomly choose
-                return self.env.getRandomAction([_state])[0]
+                return self.env.getRandomActions([_state])[0]
             else:
                 # use model to choose
-                x_data = self.env.getInput([_state])
+                x_data = self.env.getInputs([_state])
                 output = self.func(x_data, False)
 
                 if self.epoch % self.config.epoch_show_log == 0:
                     logger.info(str(output))
-                return self.env.getBestAction(output, [_state])[0]
+                return self.env.getBestActions(output, [_state])[0]
         else:
-            x_data = self.env.getInput([_state])
+            x_data = self.env.getInputs([_state])
             output = self.func(x_data, False)
             logger.info(output)
-            return self.env.getBestAction(output, [_state])[0]
+            return self.env.getBestActions(output, [_state])[0]
 
     def updateEpsilon(self):
         self.config.epsilon = max(
@@ -194,13 +194,13 @@ class AgentAbstract:
         """
         get and stack cur inputs from tuples
         """
-        return self.env.getInput([t.state for t in _batch_tuples])
+        return self.env.getInputs([t.state for t in _batch_tuples])
 
     def getNextInputs(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         """
         get and stack next inputs from tuples
         """
-        return self.env.getInput([t.next_state for t in _batch_tuples])
+        return self.env.getInputs([t.next_state for t in _batch_tuples])
 
     def getActionData(
             self, _shape: typing.Tuple[int],

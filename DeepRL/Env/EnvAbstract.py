@@ -27,23 +27,23 @@ class EnvAbstract(object):
         """
         raise NotImplementedError
 
-    def getInput(
+    def getInputs(
             self, _state_list: typing.Sequence[EnvState]
     ) -> np.ndarray:
         raise NotImplementedError
 
-    def getRandomAction(
+    def getRandomActions(
             self, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         raise NotImplementedError
 
-    def getBestAction(
+    def getBestActions(
             self, _data: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         raise NotImplementedError
 
-    def getSoftAction(
+    def getSoftActions(
             self, _data: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:

@@ -1,3 +1,4 @@
+import logging
 import random
 import typing
 
@@ -13,6 +14,9 @@ from DeepRL.Env import EnvState, EnvAbstract
 from DeepRL.Replay import NaiveReplay
 from DeepRL.Train import Train
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 
 class DemoEnv(EnvAbstract):
     def __init__(self):
@@ -27,43 +31,35 @@ class DemoEnv(EnvAbstract):
         self.in_game = True
 
     def getState(self) -> EnvState:
-        return EnvState(self.in_game, {'x': self.o})
+        return EnvState(self.in_game, self.o)
 
     def doAction(self, _action: int) -> float:
         self.o, reward, is_quit, _ = self.g.step(_action)
         self.in_game = not is_quit
         self.total_reward += reward
         if self.total_reward == 200:
+            logger.info('!! win !!')
             self.in_game = False
         self.g.render()
         return reward
 
-    def getInput(
+    def getInputs(
             self, _state_list: typing.Sequence[EnvState]
     ) -> np.ndarray:
         return np.array([
-            d.state['x'] for d in _state_list
+            d.state for d in _state_list
         ])
 
-    def getRandomAction(
+    def getRandomActions(
             self, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         return [random.randint(0, 1) for _ in _state_list]
 
-    def getBestAction(
+    def getBestActions(
             self, _data: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         return np.argmax(_data, 1)
-
-    def getSoftAction(
-            self, _data: np.ndarray,
-            _state_list: typing.Sequence[EnvState]
-    ) -> typing.Sequence[int]:
-        ret = []
-        for d in _data:
-            ret += np.random.choice(len(d), 1, p=d).tolist()
-        return ret
 
 
 class Model(nn.Module):

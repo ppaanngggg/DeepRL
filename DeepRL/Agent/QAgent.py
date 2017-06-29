@@ -64,7 +64,7 @@ class QAgent(AgentAbstract):
         cur_output = cur_output.sum(1)
         # compute forward
         next_output = self.q_func(next_x)
-        next_action = self.env.getBestAction(
+        next_action = self.env.getBestActions(
             next_output.data.numpy(),
             [t.next_state for t in _batch_tuples]
         )
