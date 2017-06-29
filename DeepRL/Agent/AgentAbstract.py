@@ -96,8 +96,6 @@ class AgentAbstract:
         while not self.env.in_game:
             self.env.startNewGame()
         self.epoch += 1
-        if self.epoch % self.config.epoch_show_log == 0:
-            logger.info('start new game')
 
     def step(self):
         """
@@ -153,6 +151,12 @@ class AgentAbstract:
             logger.info(output)
             return self.env.getBestAction(output, [_state])[0]
 
+    def updateEpsilon(self):
+        self.config.epsilon = max(
+            self.config.epsilon_underline,
+            self.config.epsilon * self.config.epsilon_decay
+        )
+
     def func(
             self, _x_data: np.ndarray, _train: bool = True
     ) -> np.ndarray:
@@ -184,7 +188,7 @@ class AgentAbstract:
         """
         do train detail, need to be overwritten
         """
-        raise Exception()
+        raise NotImplementedError
 
     def getCurInputs(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         """

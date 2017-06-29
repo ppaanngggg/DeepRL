@@ -12,6 +12,11 @@ Framework for deep reinforcement learning.
 - python3.6
 - numpy
 - pytorch
+- gym
+
+## Install
+1. `git clone XXX`
+2. `pip install -e .`
 
 ## Modules:
 

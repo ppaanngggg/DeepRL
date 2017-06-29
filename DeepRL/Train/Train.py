@@ -1,7 +1,11 @@
+import logging
 import sys
 from select import select
 
 from DeepRL.Agent.AgentAbstract import AgentAbstract
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 class Train(object):
@@ -42,6 +46,8 @@ class Train(object):
             self.agent.startNewGame()
             self.epoch += 1
             self.step_local = 0  # reset local steps
+
+            logger.info('Start new game: {}'.format(self.epoch))
 
             in_game = True
             while in_game:

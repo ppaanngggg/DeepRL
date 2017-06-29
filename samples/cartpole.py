@@ -85,10 +85,11 @@ if __name__ == '__main__':
         _model=model, _env=DemoEnv(),
         _gamma=0.9, _batch_size=32,
         _epsilon_init=1.0, _epsilon_decay=0.9999,
-        _epsilon_underline=0.05,
+        _epsilon_underline=0.1,
         _replay=NaiveReplay(),
         _optimizer=optim.SGD(model.parameters(), 0.001, 0.9)
     )
+    agent.config.epoch_show_log = 100
     train = Train(
         agent,
         _epoch_max=10000,
