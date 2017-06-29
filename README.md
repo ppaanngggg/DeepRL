@@ -4,20 +4,18 @@ Framework for deep reinforcement learning.
 
 ## Features:
 
-- Complete algorithms are splited into modules
-- Very easy to run algorithms asynchronously
+- Algorithms are splited into modules
+- Easy to run algorithms asynchronously
 - Easy to add new algorithms
 
 ## Dependences
-- python2
+- python3.6
 - numpy
-- SharedArray
-- zmq (for asyn train)
-- tensorflow
+- pytorch
 
 ## Modules:
 
-### 1\. Agent
+### 1. Agent
 
 - QAgent : Basic deep Q learning with double Q learning
 
@@ -51,7 +49,7 @@ Framework for deep reinforcement learning.
 
   > Deep Reinforcement Learning from Self-Play in Imperfect-Information Games
 
-### 2\. Replay
+### 2. Replay
 
 - Replay : Basic replay, randomly choose from pool and remove the oldest one
 
@@ -67,24 +65,17 @@ Framework for deep reinforcement learning.
 
 - TmpReplay : just for module, no replay at all
 
-### 3\. Train
+### 3. Train
 
 - Train : normal trainer
 - AsynTrain : asynchronous trainer
 
-### 4\. Test
+### 4. Env
 
-- Test : normal tester
-
-### 5\. Env
-
-- Env : Env interface, similar to gym's interfaces. User has to reimplement interface functions
-
-## Example
-
-<https://github.com/ppaanngggg/deep_rl_experiment>
+- EnvAbstract : Env interface, similar to gym's interfaces. User has to reimplement interface functions
 
 ## TODO
 
-1. turn Chainer to Tensorflow
-2. add continue control
+1. turn python2 to python3.6
+2. turn tensorflow to pytorch
+3. add continue control

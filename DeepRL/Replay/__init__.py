@@ -1,4 +1,4 @@
-from .Replay import Replay
-from .PrioritizedReplay import PrioritizedReplay
-from .ReservoirReplay import ReservoirReplay
-from .TmpReplay import TmpReplay
+from .NaiveReplay import NaiveReplay
+# from .PrioritizedReplay import PrioritizedReplay
+# from .ReservoirReplay import ReservoirReplay
+# from .TmpReplay import TmpReplay

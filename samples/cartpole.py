@@ -1,73 +1,100 @@
-from DeepRL.Env import Env
-from DeepRL.Agent import QAgent, NStepQAgent, AACAgent
-from DeepRL.Replay import PrioritizedReplay
-from DeepRL.Train import Train
-from DeepRL.Test import Test
+import random
+import typing
 
 import gym
-import tensorflow as tf
 import numpy as np
-import random
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.autograd import Variable
+
+from DeepRL.Agent import QAgent
+from DeepRL.Env import EnvState, EnvAbstract
+from DeepRL.Replay import NaiveReplay
+from DeepRL.Train import Train
 
 
-class DemoEnv(Env):
-
+class DemoEnv(EnvAbstract):
     def __init__(self):
-        super(DemoEnv, self).__init__()
+        super().__init__()
         self.g = gym.make('CartPole-v0')
+        self.o: np.ndarray = None
         self.total_reward = 0.
-        self.total_reward_list = []
 
-    def doStartNewGame(self):
-        self.total_reward_list.append(self.total_reward)
-        print len(self.total_reward_list), self.total_reward_list[-1]
-        self.total_reward = 0.
+    def startNewGame(self):
         self.o = self.g.reset()
+        self.total_reward = 0.
+        self.in_game = True
 
-    def doGetState(self):
-        return {'x': np.expand_dims(self.o.astype(np.float32), 0)}
+    def getState(self) -> EnvState:
+        return EnvState(self.in_game, {'x': self.o})
 
-    def doDoAction(self, _action):
-        self.o, reward, quit, _ = self.g.step(_action)
-        self.in_game = not quit
+    def doAction(self, _action: int) -> float:
+        self.o, reward, is_quit, _ = self.g.step(_action)
+        self.in_game = not is_quit
         self.total_reward += reward
         if self.total_reward == 200:
             self.in_game = False
-        # self.g.render()
+        self.g.render()
         return reward
 
-    def doGetX(self, _state):
-        return _state.state['x']
+    def getInput(
+            self, _state_list: typing.Sequence[EnvState]
+    ) -> np.ndarray:
+        return np.array([
+            d.state['x'] for d in _state_list
+        ])
 
-    def doGetRandomAction(self, _state):
-        return random.randint(0, 1)
+    def getRandomAction(
+            self, _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
+        return [random.randint(0, 1) for _ in _state_list]
 
-    def doGetBestAction(self, _data, _state_list):
-        return np.argmax(_data, 1).tolist()
+    def getBestAction(
+            self, _data: np.ndarray,
+            _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
+        return np.argmax(_data, 1)
 
-    def doGetSoftAction(self, _data, _state_list):
+    def getSoftAction(
+            self, _data: np.ndarray,
+            _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
         ret = []
         for d in _data:
             ret += np.random.choice(len(d), 1, p=d).tolist()
         return ret
 
 
-def model(_x):
-    w1 = tf.Variable(tf.random_uniform([4, 20]))
-    b1 = tf.Variable(tf.zeros([20]))
-    w2 = tf.Variable(tf.random_uniform([20, 2]))
-    b2 = tf.Variable(tf.zeros([2]))
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
 
-    hidden = tf.nn.relu(tf.matmul(_x, w1) + b1)
-    output = tf.matmul(hidden, w2) + b2
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 2)
 
-    return output, [w1, b1, w2, b2]
+    def forward(self, x: Variable):
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
-agent = QAgent(
-    _model=model, _env=DemoEnv(),
-    _replay=PrioritizedReplay(),
-    _optimizer=tf.train.RMSPropOptimizer(0.001, decay=0.99),
-    _epsilon=1.0, _epsilon_decay=0.999, _epsilon_underline=0.1,
-)
-train = Train(agent, _step_save=1e8)
-train.run()
+
+if __name__ == '__main__':
+    model = Model()
+    agent = QAgent(
+        _model=model, _env=DemoEnv(),
+        _gamma=0.9, _batch_size=32,
+        _epsilon_init=1.0, _epsilon_decay=0.9999,
+        _epsilon_underline=0.05,
+        _replay=NaiveReplay(),
+        _optimizer=optim.SGD(model.parameters(), 0.001, 0.9)
+    )
+    train = Train(
+        agent,
+        _epoch_max=10000,
+        _step_init=100,
+        _step_train=1,
+        _step_update_target=1000,
+        _step_save=10000000,
+    )
+    train.run()
