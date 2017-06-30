@@ -5,11 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
-
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 from DeepRL.Env import EnvAbstract
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
+from torch.autograd import Variable
 
 
 class QAgent(AgentAbstract):

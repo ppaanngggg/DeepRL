@@ -1,7 +1,6 @@
 import typing
 
 import numpy as np
-
 from DeepRL.Env.EnvState import EnvState
 
 
@@ -10,6 +9,12 @@ class EnvAbstract(object):
         self.in_game = False
 
     def startNewGame(self):
+        """
+        reset and start a new game,
+        !!! you have to create the init state !!!
+
+        :return: none
+        """
         raise NotImplementedError
 
     def getState(self) -> EnvState:
@@ -22,29 +27,55 @@ class EnvAbstract(object):
         """
         step according to the action, and return reward
 
-        :param _action:
-        :return:
+        :param _action: action
+        :return: reward
         """
         raise NotImplementedError
 
     def getInputs(
             self, _state_list: typing.Sequence[EnvState]
     ) -> np.ndarray:
+        """
+        get the inputs from states to model
+
+        :param _state_list: list of states
+        :return: array of input
+        """
         raise NotImplementedError
 
     def getRandomActions(
             self, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
+        """
+        return the random actions according to states
+
+        :param _state_list:
+        :return:
+        """
         raise NotImplementedError
 
     def getBestActions(
             self, _data: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
+        """
+        return best actions according to model's output and states
+
+        :param _data:
+        :param _state_list:
+        :return:
+        """
         raise NotImplementedError
 
     def getSoftActions(
             self, _data: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
+        """
+        return soft actions according to model's output and states
+
+        :param _data:
+        :param _state_list:
+        :return:
+        """
         raise NotImplementedError
