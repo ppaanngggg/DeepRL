@@ -1,11 +1,29 @@
 import logging
 import sys
 from select import select
+import cmd
 
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+class TrainShell(cmd.Cmd):
+    intro = '[[ Welcome to the shell.   Type help or ? to list commands. ]]'
+    prompt = '>'
+
+    def __init__(self, _trainer: 'Train'):
+        super().__init__()
+        self.trainer: Train = _trainer
+
+    def do_save(self, _arg):
+        self.trainer.agent.save(
+            self.trainer.epoch, self.trainer.step_local
+        )
+
+    def do_bye(self, _arg):
+        return True
 
 
 class Train(object):
@@ -41,6 +59,8 @@ class Train(object):
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
+        self.shell = TrainShell(self)
+
     def run(self):
         while self.epoch < self.epoch_max:
             self.agent.startNewGame()
@@ -67,19 +87,7 @@ class Train(object):
                 # cmd
                 rlist, _, _ = select([sys.stdin], [], [], 0.001)
                 if rlist:
-                    print('[[[ interrupted ]]]')
-                    sys.stdin.readline().strip()
-                    while True:
-                        print('[[[ Please input (save, continue, quit, ...) ]]]')
-                        s = sys.stdin.readline().strip()
-                        if s == 'save':
-                            self.agent.save(self.epoch, self.step_local)
-                        elif s == 'continue':
-                            break
-                        elif s == 'quit':
-                            return
-                        else:
-                            print('[[[ unknow cmd... ]]]')
-                            pass
+                    sys.stdin.readline()
+                    self.shell.cmdloop()
                 else:
                     pass
