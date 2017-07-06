@@ -3,8 +3,8 @@ import random
 import typing
 
 import numpy as np
+import torch
 import torch.nn as nn
-
 from DeepRL.Env import EnvAbstract, EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
@@ -215,11 +215,7 @@ class AgentAbstract:
     def _update_target_func(_target_func: nn.Module, _func: nn.Module):
         if _target_func is not None:
             assert _func is not None
-            for target_p, p in zip(
-                    _target_func.parameters(),
-                    _func.parameters(),
-            ):
-                target_p.data.copy_(p.data)
+            _target_func.load_state_dict(_func.state_dict())
 
     def updateTargetFunc(self):
         """
@@ -398,8 +394,6 @@ class AgentAbstract:
         else:
             return np.ones((len(_batch_tuples)), np.float32)
 
-
-
     def chooseSoftAction(self, _model, _state):
         x_data = self.env.getX(_state)
         output = self.func(_model, x_data, False)
@@ -413,11 +407,21 @@ class AgentAbstract:
             return self.env.getBestAction(output, [_state])[0]
 
     def save(self, _epoch, _step):
-        pass
-        # filename = './models/epoch_' + str(_epoch) + '_step_' + str(_step)
-        # logger.info(filename)
-        # with tf.device(self.config.device):
-        #     np.save(filename, self.getVars())
+        if self.p_func is not None:
+            torch.save(
+                self.p_func.state_dict(),
+                open('./save/p_{}_{}'.format(_epoch, _step), 'wb')
+            )
+        if self.q_func is not None:
+            torch.save(
+                self.q_func.state_dict(),
+                open('./save/q_{}_{}'.format(_epoch, _step), 'wb')
+            )
+        if self.v_func is not None:
+            torch.save(
+                self.v_func.state_dict(),
+                open('./save/v_{}_{}'.format(_epoch, _step), 'wb')
+            )
 
     def load(self, filename):
         logger.info(filename)

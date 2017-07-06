@@ -6,7 +6,7 @@ from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
 class NaiveReplay(ReplayAbstract):
-    def __init__(self, _N: int = 1e4):
+    def __init__(self, _N: int = 1e5):
         self.N = int(_N)
         self.tmp_memory_pool: typing.List[ReplayTuple] = []
         self.memory_pool: typing.List[ReplayTuple] = []
