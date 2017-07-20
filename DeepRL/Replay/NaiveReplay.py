@@ -1,4 +1,5 @@
 import typing
+from collections import deque
 
 import numpy as np
 
@@ -7,10 +8,9 @@ from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
 class NaiveReplay(ReplayAbstract):
-    def __init__(self, _N: int = 1e5):
-        self.N = int(_N)
-        self.tmp_memory_pool: typing.List[ReplayTuple] = []
-        self.memory_pool: typing.List[ReplayTuple] = []
+    def __init__(self, _size: int = 1e5):
+        self.size = int(_size)
+        self.memory_pool: typing.Deque[ReplayTuple] = deque(maxlen=self.size)
 
     def push(
             self, _state: EnvState,
@@ -18,7 +18,7 @@ class NaiveReplay(ReplayAbstract):
             _next_state: EnvState, _mask=None
     ):
         # store new tuples into tmp memory buffer
-        self.tmp_memory_pool.append(
+        self.memory_pool.append(
             ReplayTuple(_state, _action, _reward, _next_state)
         )
 
@@ -29,23 +29,13 @@ class NaiveReplay(ReplayAbstract):
         if len(self.memory_pool):
             choices = np.random.choice(
                 len(self.memory_pool),
-                min(
-                    len(self.memory_pool),
-                    max(_num - len(self.tmp_memory_pool), 0)
-                ),
+                min(len(self.memory_pool), _num),
                 replace=False,
             )
-        return [self.memory_pool[choice] for choice in choices] + self.tmp_memory_pool
+        return [self.memory_pool[choice] for choice in choices]
 
     def merge(self):
-        self.memory_pool += self.tmp_memory_pool
-        self.tmp_memory_pool = []
-        if len(self.memory_pool) > self.N:
-            self.memory_pool = self.memory_pool[-self.N:]
+        pass
 
     def __repr__(self) -> str:
-        tmp = \
-            "!!! tmp_memory_pool !!!\n" \
-            "{}\n!!! memory_pool !!!\n" \
-            "{}"
-        return tmp.format(self.tmp_memory_pool, self.memory_pool)
+        return '{}'.format(self.memory_pool)

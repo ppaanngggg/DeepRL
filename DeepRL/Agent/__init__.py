@@ -1,1 +1,1 @@
-from .QAgent import QAgent
+from .DoubleDQNAgent import DoubleDQNAgent

@@ -12,7 +12,7 @@ from DeepRL.Env import EnvAbstract
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
-class QAgent(AgentAbstract):
+class DoubleDQNAgent(AgentAbstract):
     def __init__(
             self, _model: nn.Module,
             _env: EnvAbstract,

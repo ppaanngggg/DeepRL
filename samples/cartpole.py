@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
-from DeepRL.Agent import QAgent
+from DeepRL.Agent import DoubleDQNAgent
 from DeepRL.Env import EnvState, EnvAbstract
 from DeepRL.Replay import NaiveReplay
 from DeepRL.Train import Train
@@ -82,7 +82,7 @@ class Model(nn.Module):
 
 if __name__ == '__main__':
     model = Model()
-    agent = QAgent(
+    agent = DoubleDQNAgent(
         _model=model, _env=DemoEnv(),
         _gamma=0.9, _batch_size=32,
         _epsilon_init=1.0, _epsilon_decay=0.9999,
