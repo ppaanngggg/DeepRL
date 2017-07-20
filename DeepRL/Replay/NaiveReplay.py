@@ -1,6 +1,7 @@
 import typing
 
 import numpy as np
+
 from DeepRL.Env import EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 

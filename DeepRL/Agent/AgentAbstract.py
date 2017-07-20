@@ -5,6 +5,7 @@ import typing
 import numpy as np
 import torch
 import torch.nn as nn
+
 from DeepRL.Env import EnvAbstract, EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
@@ -190,7 +191,7 @@ class AgentAbstract:
         """
         raise NotImplementedError
 
-    def getCurInputs(self, _batch_tuples: typing.Sequence[ReplayTuple]):
+    def getPrevInputs(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         """
         get and stack cur inputs from tuples
         """

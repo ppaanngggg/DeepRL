@@ -5,10 +5,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.autograd import Variable
+
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 from DeepRL.Env import EnvAbstract
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
-from torch.autograd import Variable
 
 
 class QAgent(AgentAbstract):
@@ -27,6 +28,8 @@ class QAgent(AgentAbstract):
 
         self.q_func: nn.Module = _model
         self.target_q_func: nn.Module = deepcopy(_model)
+        for p in self.target_q_func.parameters():
+            p.requires_grad = False
 
         # set config
         self.config.gamma = _gamma
@@ -45,22 +48,28 @@ class QAgent(AgentAbstract):
     def func(
             self, _x_data: np.ndarray, _train: bool = True
     ) -> np.ndarray:
-        x_var = Variable(torch.from_numpy(_x_data)).float()
+        x_var = Variable(
+            torch.from_numpy(_x_data).float(),
+            volatile=not _train
+        )
         return self.q_func(x_var).data.numpy()
 
     def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         # get inputs from batch
-        cur_x = self.getCurInputs(_batch_tuples)
+        prev_x = self.getPrevInputs(_batch_tuples)
         next_x = self.getNextInputs(_batch_tuples)
-        cur_x = Variable(torch.from_numpy(cur_x)).float()
-        next_x = Variable(torch.from_numpy(next_x)).float()
-
-        cur_output = self.q_func(cur_x)
-        cur_action = self.getActionData(
-            cur_output.size(), [d.action for d in _batch_tuples]
+        prev_x = Variable(torch.from_numpy(prev_x).float())
+        next_x = Variable(
+            torch.from_numpy(next_x).float(),
+            volatile=True
         )
-        cur_output = cur_output * Variable(torch.from_numpy(cur_action))
-        cur_output = cur_output.sum(1)
+
+        prev_output = self.q_func(prev_x)
+        prev_action = self.getActionData(
+            prev_output.size(), [d.action for d in _batch_tuples]
+        )
+        prev_output = prev_output * Variable(torch.from_numpy(prev_action))
+        prev_output = prev_output.sum(1)
         # compute forward
         next_output = self.q_func(next_x)
         next_action = self.env.getBestActions(
@@ -72,7 +81,7 @@ class QAgent(AgentAbstract):
             next_output.data.numpy(), next_action, _batch_tuples
         )
         loss = self.criterion(
-            cur_output, Variable(torch.from_numpy(target_data))
+            prev_output, Variable(torch.from_numpy(target_data))
         )
 
         self.optimizer.zero_grad()

@@ -24,9 +24,13 @@ class DemoEnv(EnvAbstract):
         self.g = gym.make('CartPole-v0')
         self.o: np.ndarray = None
         self.total_reward = 0.
+        self.render = False
 
     def startNewGame(self):
         self.o = self.g.reset()
+        logger.info('total_reward: {}'.format(self.total_reward))
+        if not self.render and self.total_reward > 195:
+            self.render = True
         self.total_reward = 0.
         self.in_game = True
 
@@ -40,7 +44,8 @@ class DemoEnv(EnvAbstract):
         if self.total_reward == 200:
             logger.info('!! win !!')
             self.in_game = False
-        self.g.render()
+        if self.render:
+            self.g.render()
         return reward
 
     def getInputs(

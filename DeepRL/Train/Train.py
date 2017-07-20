@@ -1,7 +1,7 @@
+import cmd
 import logging
 import sys
 from select import select
-import cmd
 
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 
