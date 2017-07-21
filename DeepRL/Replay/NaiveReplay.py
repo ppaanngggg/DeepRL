@@ -15,7 +15,7 @@ class NaiveReplay(ReplayAbstract):
     def push(
             self, _state: EnvState,
             _action: int, _reward: float,
-            _next_state: EnvState, _mask=None
+            _next_state: EnvState
     ):
         # store new tuples into tmp memory buffer
         self.memory_pool.append(

@@ -1,13 +1,15 @@
 import typing
 
+import numpy as np
+
 from DeepRL.Env import EnvState
 
 
 class ReplayTuple:
     def __init__(
             self, _state: EnvState,
-            _action: int, _reward: float,
-            _next_state: EnvState
+            _action: typing.Union[int, np.ndarray],
+            _reward: float, _next_state: EnvState
     ):
         self.state = _state
         self.action = _action
@@ -30,8 +32,8 @@ class ReplayTuple:
 class ReplayAbstract:
     def push(
             self, _state: EnvState,
-            _action: int, _reward: float,
-            _next_state: EnvState, _mask=None
+            _action: typing.Union[int, np.ndarray],
+            _reward: float, _next_state: EnvState,
     ):
         raise NotImplementedError()
 

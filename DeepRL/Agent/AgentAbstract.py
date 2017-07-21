@@ -34,6 +34,7 @@ class Config(object):
 
         self.err_clip = None  # whether to clip err
         self.grad_clip = None  # whether to clip grad
+        self.action_clip = None  # whether to clip action
 
         # bootstrapped, num of heads
         self.K = None
@@ -98,15 +99,13 @@ class AgentAbstract:
             self.env.startNewGame()
         self.epoch += 1
 
-    def step(self):
+    def step(self) -> bool:
         """
         agent will get cur state and choose one action and execute
 
         Returns:
             still in game or not
         """
-        if not self.env.in_game:
-            return False
 
         # get current state
         cur_state = self.env.getState()
@@ -227,186 +226,6 @@ class AgentAbstract:
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)
 
-    def getVars(self):
-        if self.vars:
-            return self.sess.run(self.vars)
-        return None
-
-    def getTargetVars(self):
-        if self.target_vars:
-            return self.sess.run(self.target_vars)
-        return None
-
-    def createSetOpPlace(self, _vars):
-        place = [tf.placeholder(tf.float32) for _ in _vars]
-        op = [v.assign(p) for v, p in zip(_vars, place)]
-        return op, place
-
-    def createSetFeedDict(self, _place, _data):
-        tmp = {}
-        for p, d in zip(_place, _data):
-            tmp[p] = d
-        return tmp
-
-    def setVars(self, _data):
-        if self.vars:
-            if self.set_vars_op is None and self.set_vars_place is None:
-                self.set_vars_op, self.set_vars_place = \
-                    self.createSetOpPlace(self.vars)
-            self.sess.run(
-                self.set_vars_op,
-                feed_dict=self.createSetFeedDict(
-                    self.set_vars_place, _data)
-            )
-
-    def setTargetVars(self, _data):
-        if self.target_vars:
-            if self.set_target_vars_op is None and self.set_target_vars_place is None:
-                self.set_target_vars_op, self.set_target_vars_place = \
-                    self.createSetOpPlace(self.target_vars)
-            self.sess.run(
-                self.set_target_vars_op,
-                feed_dict=self.createSetFeedDict(
-                    self.set_target_vars_place, _data)
-            )
-
-    def nstep(self, _model):
-        """
-        Returns:
-            still in game or not
-        """
-        if self.is_train:
-            if not self.env.in_game:
-                return False
-
-            state_list = []
-            action_list = []
-            reward_list = []
-
-            cur_state = self.env.getState()
-            for _ in range(self.config.step_len):
-                state_list.append(cur_state)
-                action = self.chooseAction(_model, cur_state)
-                action_list.append(action)
-                reward = self.env.doAction(action)
-                reward_list.append(reward)
-                if self.epoch % self.config.epoch_show_log == 0:
-                    logger.info(
-                        'Action: ' + str(action) + '; Reward: %.3f' % (reward))
-                next_state = self.env.getState()
-                if not self.env.in_game:
-                    break
-                cur_state = next_state
-
-            for i in range(len(state_list)):
-                self.replay.push(
-                    state_list[i], action_list[i], reward_list[i:], next_state)
-            return self.env.in_game
-        else:
-            return self.step(_model)
-
-    def stepUntilEnd(self, _model):
-        """
-        Returns:
-            still in game or not
-        """
-        if self.is_train:
-            if not self.env.in_game:
-                return False
-
-            state_list = []
-            action_list = []
-            reward_list = []
-
-            cur_state = self.env.getState()
-            while self.env.in_game:
-                state_list.append(cur_state)
-                action = self.chooseAction(_model, cur_state)
-                action_list.append(action)
-                reward = self.env.doAction(action)
-                reward_list.append(reward)
-                if self.epoch % self.config.epoch_show_log == 0:
-                    logger.info(
-                        'Action: ' + str(action) + '; Reward: %.3f' % (reward))
-                next_state = self.env.getState()
-                cur_state = next_state
-
-            for i in range(len(state_list)):
-                self.replay.push(
-                    state_list[i], action_list[i], reward_list[i:], next_state)
-            return self.env.in_game
-        else:
-            return self.step(_model)
-
-    def getQTargetData(
-            self, _next_output: np.ndarray,
-            _next_action: typing.Sequence[int],
-            _batch_tuples: typing.Sequence[ReplayTuple]
-    ) -> np.ndarray:
-        target_data = np.zeros(len(_batch_tuples), np.float32)
-        for i in range(len(_batch_tuples)):
-            target_value = _batch_tuples[i].reward
-            # if not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                target_value += \
-                    self.config.gamma * _next_output[i][_next_action[i]]
-            target_data[i] = target_value
-        return target_data
-
-    def getNStepQTargetData(self, _next_output, _next_action, _batch_tuples):
-        target_data = np.zeros((len(_batch_tuples)), np.float32)
-        for i in range(len(_batch_tuples)):
-            reward = _batch_tuples[i].reward
-            target_value = 0.
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                target_value += _next_output[i][_next_action[i]]
-            for r in reversed(reward):
-                target_value = r + self.config.gamma * target_value
-            target_data[i] = target_value
-        return target_data
-
-    def getVTargetData(self, _next_output, _batch_tuples):
-        target_data = np.zeros((len(_batch_tuples)), np.float32)
-        for i in range(len(_batch_tuples)):
-            target_value = _batch_tuples[i].reward
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                target_value += self.config.gamma * _next_output[i][0]
-            target_data[i] = target_value
-        return target_data
-
-    def getNStepVTargetData(self, _next_output, _batch_tuples):
-        target_data = np.zeros((len(_batch_tuples)), np.float32)
-        for i in range(len(_batch_tuples)):
-            reward = _batch_tuples[i].reward
-            target_value = 0.
-            # if not empty position, not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                target_value += _next_output[i][0]
-            for r in reversed(reward):
-                target_value = r + self.config.gamma * target_value
-            target_data[i] = target_value
-        return target_data
-
-    def getWeightData(self, _weights, _batch_tuples):
-        if _weights is not None:
-            return _weights
-        else:
-            return np.ones((len(_batch_tuples)), np.float32)
-
-    def chooseSoftAction(self, _model, _state):
-        x_data = self.env.getX(_state)
-        output = self.func(_model, x_data, False)
-
-        if self.is_train:
-            if self.epoch % self.config.epoch_show_log == 0:
-                logger.info(output)
-            return self.env.getSoftAction(output, [_state])[0]
-        else:
-            logger.info(output)
-            return self.env.getBestAction(output, [_state])[0]
-
     def save(self, _epoch, _step):
         if self.p_func is not None:
             torch.save(
@@ -423,10 +242,3 @@ class AgentAbstract:
                 self.v_func.state_dict(),
                 open('./save/v_{}_{}'.format(_epoch, _step), 'wb')
             )
-
-    def load(self, filename):
-        logger.info(filename)
-        with tf.device(self.config.device):
-            self.setVars(np.load(filename))
-
-        self.updateTargetFunc()

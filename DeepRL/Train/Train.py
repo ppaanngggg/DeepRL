@@ -22,6 +22,13 @@ class TrainShell(cmd.Cmd):
             self.trainer.epoch, self.trainer.step_local
         )
 
+    def do_eval(self, _arg):
+        self.trainer.agent.evaluating()
+        self.trainer.agent.startNewGame()
+        while self.trainer.agent.step():
+            pass
+        self.trainer.agent.training()
+
     def do_bye(self, _arg):
         return True
 

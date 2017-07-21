@@ -64,13 +64,15 @@ class DoubleDQNAgent(AgentAbstract):
             volatile=True
         )
 
+        # calc current value estimate
         prev_output = self.q_func(prev_x)
         prev_action = self.getActionData(
             prev_output.size(), [d.action for d in _batch_tuples]
         )
         prev_output = prev_output * Variable(torch.from_numpy(prev_action))
         prev_output = prev_output.sum(1)
-        # compute forward
+
+        # calc target value estimate and loss
         next_output = self.q_func(next_x)
         next_action = self.env.getBestActions(
             next_output.data.numpy(),
@@ -84,6 +86,7 @@ class DoubleDQNAgent(AgentAbstract):
             prev_output, Variable(torch.from_numpy(target_data))
         )
 
+        # update q func
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
