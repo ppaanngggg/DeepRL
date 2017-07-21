@@ -211,6 +211,21 @@ class AgentAbstract:
             action_data[i, _actions[i]] = 1.
         return action_data
 
+    def getQTargetData(
+            self, _next_output: np.ndarray,
+            _next_action: typing.Sequence[int],
+            _batch_tuples: typing.Sequence[ReplayTuple]
+    ) -> np.ndarray:
+        target_data = np.zeros(len(_batch_tuples), np.float32)
+        for i in range(len(_batch_tuples)):
+            target_value = _batch_tuples[i].reward
+            # if not terminal state
+            if _batch_tuples[i].next_state.in_game:
+                target_value += \
+                    self.config.gamma * _next_output[i][_next_action[i]]
+            target_data[i] = target_value
+        return target_data
+
     @staticmethod
     def _update_target_func(_target_func: nn.Module, _func: nn.Module):
         if _target_func is not None:
