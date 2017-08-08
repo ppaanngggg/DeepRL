@@ -19,7 +19,9 @@ class DDPGAgent(AgentAbstract):
             _critic_model: nn.Module,
             _env: EnvAbstract,
             _gamma: float, _batch_size: int,
-            _theta: float, _sigma: float, _update_rate: float,
+            _theta: typing.Union[float, np.ndarray],
+            _sigma: typing.Union[float, np.ndarray],
+            _update_rate: float,
             _replay: ReplayAbstract = None,
             _actor_optimizer: optim.Optimizer = None,
             _critic_optimizer: optim.Optimizer = None,
@@ -62,19 +64,20 @@ class DDPGAgent(AgentAbstract):
         diff_x = self.theta * -self.current_x
         diff_x = diff_x + self.sigma * np.random.normal(size=self.current_x.shape)
         self.current_x = self.current_x + diff_x
-        return _action + self.current_x
+        tmp_action = _action + self.current_x
+        return tmp_action
 
     def chooseAction(self, _state: EnvState) -> np.ndarray:
         x_data = self.env.getInputs([_state])
+        a = self.func(x_data, False)[0]
         if self.config.is_train:
-            a = self.func(x_data, False)[0]
             return np.clip(
                 self._action_random(a),
                 -self.config.action_clip,
                 self.config.action_clip,
             )
         else:
-            return self.func(x_data, False)[0]
+            return a
 
     def func(
             self, _x_data: np.ndarray, _train: bool = True

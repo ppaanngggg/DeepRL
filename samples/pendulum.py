@@ -22,7 +22,7 @@ class DemoEnv(EnvAbstract):
         super().__init__()
         self.g = gym.make('Pendulum-v0')
         self.o: np.ndarray = None
-        self.total_reward = 0.
+        self.total_reward = 0.0
         self.render = False
 
     def startNewGame(self):
@@ -30,7 +30,7 @@ class DemoEnv(EnvAbstract):
         logger.info('total_reward: {}'.format(self.total_reward))
         if not self.render and 0. > self.total_reward > -500.:
             self.render = True
-        self.total_reward = 0.
+        self.total_reward = 0.0
         self.in_game = True
 
     def getState(self) -> EnvState:

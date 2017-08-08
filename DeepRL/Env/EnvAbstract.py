@@ -23,7 +23,7 @@ class EnvAbstract(object):
         """
         raise NotImplementedError
 
-    def doAction(self, _action: int) -> float:
+    def doAction(self, _action: typing.Union[int, np.ndarray]) -> float:
         """
         step according to the action, and return reward
 
