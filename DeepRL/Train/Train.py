@@ -70,11 +70,11 @@ class Train(object):
 
     def run(self):
         while self.epoch < self.epoch_max:
+            logger.info('Start new game: {}'.format(self.epoch))
+
             self.agent.startNewGame()
             self.epoch += 1
             self.step_local = 0  # reset local steps
-
-            logger.info('Start new game: {}'.format(self.epoch))
 
             in_game = True
             while in_game:
@@ -92,7 +92,7 @@ class Train(object):
                         self.agent.save(self.epoch, self.step_local)
 
                 # cmd
-                rlist, _, _ = select([sys.stdin], [], [], 0.001)
+                rlist, _, _ = select([sys.stdin], [], [], 0.0001)
                 if rlist:
                     sys.stdin.readline()
                     self.shell.cmdloop()
