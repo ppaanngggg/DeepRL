@@ -1,3 +1,4 @@
+import argparse
 import logging
 import typing
 
@@ -77,6 +78,10 @@ class CriticModel(nn.Module):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gpu', action='store_true')
+    args = parser.parse_args()
+
     actor = ActorModel()
     critic = CriticModel()
 
@@ -88,6 +93,7 @@ if __name__ == '__main__':
         _actor_optimizer=optim.Adam(actor.parameters(), lr=1e-4),
         _critic_optimizer=optim.Adam(critic.parameters(), lr=1e-3),
         _action_clip=2.0,
+        _gpu=args.gpu
     )
     agent.config.epoch_show_log = 10000
 

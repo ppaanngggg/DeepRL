@@ -18,16 +18,23 @@ class DDPGAgent(AgentAbstract):
             _actor_model: nn.Module,
             _critic_model: nn.Module,
             _env: EnvAbstract,
-            _gamma: float, _batch_size: int,
-            _theta: typing.Union[float, np.ndarray],
-            _sigma: typing.Union[float, np.ndarray],
-            _update_rate: float,
+            _gamma: float = 0.9, _batch_size: int = 64,
+            _theta: typing.Union[float, np.ndarray] = 0.1,
+            _sigma: typing.Union[float, np.ndarray] = 0.1,
+            _update_rate: float = 0.001,
             _replay: ReplayAbstract = None,
             _actor_optimizer: optim.Optimizer = None,
             _critic_optimizer: optim.Optimizer = None,
-            _action_clip: float = None,
+            _action_clip: float = 1.0,
+            _gpu: bool = False,
     ):
         super().__init__(_env)
+
+        # set config
+        self.config.gamma = _gamma
+        self.config.batch_size = _batch_size
+        self.config.action_clip = _action_clip
+        self.config.gpu = _gpu
 
         self.p_func: nn.Module = _actor_model
         self.target_p_func: nn.Module = deepcopy(self.p_func)
@@ -37,11 +44,12 @@ class DDPGAgent(AgentAbstract):
         self.target_q_func: nn.Module = deepcopy(self.q_func)
         for p in self.target_q_func.parameters():
             p.requires_grad = False
-
-        # set config
-        self.config.gamma = _gamma
-        self.config.batch_size = _batch_size
-        self.config.action_clip = _action_clip
+        # turn to gpu, if necessary
+        if self.config.gpu:
+            self.p_func.cuda()
+            self.target_p_func.cuda()
+            self.q_func.cuda()
+            self.target_q_func.cuda()
 
         # explore rate
         self.theta = _theta
@@ -82,32 +90,43 @@ class DDPGAgent(AgentAbstract):
     def func(
             self, _x_data: np.ndarray, _train: bool = True
     ) -> np.ndarray:
+        x_data = torch.from_numpy(_x_data).float()
+        if self.config.gpu:
+            x_data = x_data.cuda()
         x_var = Variable(
-            torch.from_numpy(_x_data).float(),
-            volatile=not _train
+            x_data, volatile=not _train
         )
-        return self.p_func(x_var).data.numpy()
+        output = self.p_func(x_var).data
+        if self.config.gpu:
+            output = output.cpu()
+        return output.numpy()
 
     def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
-        prev_x = self.getPrevInputs(_batch_tuples)
-        next_x = self.getNextInputs(_batch_tuples)
-        prev_x = Variable(torch.from_numpy(prev_x).float())
-        next_x = Variable(
-            torch.from_numpy(next_x).float(),
-            volatile=True
-        )
-        prev_action = np.array([d.action for d in _batch_tuples])
-        prev_action = Variable(torch.from_numpy(prev_action).float())
+        prev_x = torch.from_numpy(self.getPrevInputs(_batch_tuples)).float()
+        next_x = torch.from_numpy(self.getNextInputs(_batch_tuples)).float()
+        prev_action = torch.from_numpy(np.array([d.action for d in _batch_tuples])).float()
+        if self.config.gpu:
+            prev_x = prev_x.cuda()
+            next_x = next_x.cuda()
+            prev_action = prev_action.cuda()
+        prev_x = Variable(prev_x)
+        next_x = Variable(next_x, volatile=True)
+        prev_action = Variable(prev_action)
 
         # calc target value estimate and loss
         next_action = self.target_p_func(next_x)
-        next_output = self.target_q_func(next_x, next_action)
+        next_output = self.target_q_func(next_x, next_action).data
+        if self.config.gpu:
+            next_output = next_output.cpu()
         target_value = self.getQTargetData(
-            next_output.data.numpy(), next_action, _batch_tuples
+            next_output.numpy(), next_action, _batch_tuples
         )
+        target_value = torch.from_numpy(target_value).float()
+        if self.config.gpu:
+            target_value = target_value.cuda()
         critic_loss = self.criterion(
             self.q_func(prev_x, prev_action),
-            Variable(torch.from_numpy(target_value).float())
+            Variable(target_value)
         )
 
         # update critic

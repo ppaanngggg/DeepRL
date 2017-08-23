@@ -22,6 +22,8 @@ class Config(object):
         """
         Alloc all configs
         """
+        self.gpu = False
+
         self.is_train = True
 
         self.gamma = None  # gamma, decay param of reward
