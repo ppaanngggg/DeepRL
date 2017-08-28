@@ -41,6 +41,7 @@ class Train(object):
             _step_train: int,
             _step_update_target: int,
             _step_save: int,
+            _use_cmd: bool=True,
     ):
         """
         one threading trainer
@@ -66,7 +67,9 @@ class Train(object):
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
-        self.shell = TrainShell(self)
+        self.use_cmd = _use_cmd
+        if self.use_cmd:
+            self.shell = TrainShell(self)
 
     def run(self):
         while self.epoch < self.epoch_max:
@@ -91,10 +94,10 @@ class Train(object):
                     if not self.step_total % self.step_save:
                         self.agent.save(self.epoch, self.step_local)
 
-                # cmd
-                rlist, _, _ = select([sys.stdin], [], [], 0.0001)
-                if rlist:
-                    sys.stdin.readline()
-                    self.shell.cmdloop()
-                else:
-                    pass
+                if self.use_cmd:  # cmd
+                    rlist, _, _ = select([sys.stdin], [], [], 0.0001)
+                    if rlist:
+                        sys.stdin.readline()
+                        self.shell.cmdloop()
+                    else:
+                        pass

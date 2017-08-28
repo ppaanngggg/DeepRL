@@ -247,15 +247,15 @@ class AgentAbstract:
         if self.p_func is not None:
             torch.save(
                 self.p_func.state_dict(),
-                open('./save/p_{}_{}'.format(_epoch, _step), 'wb')
+                './save/p_{}_{}'.format(_epoch, _step)
             )
         if self.q_func is not None:
             torch.save(
                 self.q_func.state_dict(),
-                open('./save/q_{}_{}'.format(_epoch, _step), 'wb')
+                './save/q_{}_{}'.format(_epoch, _step)
             )
         if self.v_func is not None:
             torch.save(
                 self.v_func.state_dict(),
-                open('./save/v_{}_{}'.format(_epoch, _step), 'wb')
+                './save/v_{}_{}'.format(_epoch, _step)
             )
