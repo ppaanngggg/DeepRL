@@ -41,6 +41,7 @@ class Train(object):
             _step_train: int,
             _step_update_target: int,
             _step_save: int,
+            _save_path: str='./save',
             _use_cmd: bool=True,
     ):
         """
@@ -67,6 +68,7 @@ class Train(object):
         self.step_update_target = _step_update_target
         self.step_save = _step_save
 
+        self.save_path = _save_path
         self.use_cmd = _use_cmd
         if self.use_cmd:
             self.shell = TrainShell(self)
@@ -92,7 +94,9 @@ class Train(object):
                     if not self.step_total % self.step_update_target:
                         self.agent.updateTargetFunc()
                     if not self.step_total % self.step_save:
-                        self.agent.save(self.epoch, self.step_local)
+                        self.agent.save(
+                            self.epoch, self.step_local, self.save_path
+                        )
 
                 if self.use_cmd:  # cmd
                     rlist, _, _ = select([sys.stdin], [], [], 0.0001)

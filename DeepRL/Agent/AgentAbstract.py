@@ -243,19 +243,19 @@ class AgentAbstract:
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)
 
-    def save(self, _epoch, _step):
+    def save(self, _epoch: int, _step: int, _path: str='./save'):
         if self.p_func is not None:
             torch.save(
                 self.p_func.state_dict(),
-                './save/p_{}_{}'.format(_epoch, _step)
+                '{}/p_{}_{}'.format(_path, _epoch, _step)
             )
         if self.q_func is not None:
             torch.save(
                 self.q_func.state_dict(),
-                './save/q_{}_{}'.format(_epoch, _step)
+                '{}/q_{}_{}'.format(_path, _epoch, _step)
             )
         if self.v_func is not None:
             torch.save(
                 self.v_func.state_dict(),
-                './save/v_{}_{}'.format(_epoch, _step)
+                '{}/v_{}_{}'.format(_path, _epoch, _step)
             )

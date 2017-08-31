@@ -70,7 +70,8 @@ class DDPGAgent(AgentAbstract):
         if self.current_x is None:
             self.current_x = np.zeros_like(_action)
         diff_x = self.theta * -self.current_x
-        diff_x = diff_x + self.sigma * np.random.normal(size=self.current_x.shape)
+        diff_x = diff_x + self.sigma * \
+            np.random.normal(size=self.current_x.shape)
         self.current_x = self.current_x + diff_x
         tmp_action = _action + self.current_x
         return tmp_action
@@ -104,7 +105,8 @@ class DDPGAgent(AgentAbstract):
     def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         prev_x = torch.from_numpy(self.getPrevInputs(_batch_tuples)).float()
         next_x = torch.from_numpy(self.getNextInputs(_batch_tuples)).float()
-        prev_action = torch.from_numpy(np.array([d.action for d in _batch_tuples])).float()
+        prev_action = torch.from_numpy(
+            np.array([d.action for d in _batch_tuples])).float()
         if self.config.gpu:
             prev_x = prev_x.cuda()
             next_x = next_x.cuda()
@@ -124,9 +126,9 @@ class DDPGAgent(AgentAbstract):
         target_value = torch.from_numpy(target_value).float()
         if self.config.gpu:
             target_value = target_value.cuda()
+        prev_output = self.q_func(prev_x, prev_action)
         critic_loss = self.criterion(
-            self.q_func(prev_x, prev_action),
-            Variable(target_value)
+            prev_output, Variable(target_value)
         )
 
         # update critic
@@ -157,9 +159,11 @@ class DDPGAgent(AgentAbstract):
                 self.target_p_func.parameters(),
                 self.p_func.parameters(),
         ):
-            tp.data = (1 - self.update_rate) * tp.data + self.update_rate * p.data
+            tp.data = (1 - self.update_rate) * \
+                tp.data + self.update_rate * p.data
         for tp, p in zip(
                 self.target_q_func.parameters(),
                 self.q_func.parameters(),
         ):
-            tp.data = (1 - self.update_rate) * tp.data + self.update_rate * p.data
+            tp.data = (1 - self.update_rate) * \
+                tp.data + self.update_rate * p.data
