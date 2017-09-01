@@ -37,9 +37,9 @@ class DDPGAgent(AgentAbstract):
         self.config.gpu = _gpu
 
         self.p_func: nn.Module = _actor_model
-        self.target_p_func: nn.Module = deepcopy(self.p_func)
-        for p in self.target_p_func.parameters():
-            p.requires_grad = False
+        # self.target_p_func: nn.Module = deepcopy(self.p_func)
+        # for p in self.target_p_func.parameters():
+        #     p.requires_grad = False
         self.q_func: nn.Module = _critic_model
         self.target_q_func: nn.Module = deepcopy(self.q_func)
         for p in self.target_q_func.parameters():
@@ -47,7 +47,7 @@ class DDPGAgent(AgentAbstract):
         # turn to gpu, if necessary
         if self.config.gpu:
             self.p_func.cuda()
-            self.target_p_func.cuda()
+            # self.target_p_func.cuda()
             self.q_func.cuda()
             self.target_q_func.cuda()
 
@@ -116,8 +116,11 @@ class DDPGAgent(AgentAbstract):
         prev_action = Variable(prev_action)
 
         # calc target value estimate and loss
-        next_action = self.target_p_func(next_x)
-        next_output = self.target_q_func(next_x, next_action).data
+        # next_action = self.target_p_func(next_x) # choose action by stable model
+        next_action = self.p_func(next_x)  # choose action by latest model
+        next_output = self.target_q_func(
+            next_x, next_action
+        ).data # get next value by stable model
         if self.config.gpu:
             next_output = next_output.cpu()
         target_value = self.getQTargetData(
@@ -137,7 +140,7 @@ class DDPGAgent(AgentAbstract):
         self.critic_optim.step()
 
         # estimate current value by current actor
-        actor_loss = self.q_func(prev_x, self.p_func(prev_x))
+        actor_loss = self.target_q_func(prev_x, self.p_func(prev_x))
         actor_loss = -actor_loss.mean()
 
         # update actor
@@ -155,12 +158,12 @@ class DDPGAgent(AgentAbstract):
         return reward_arr + self.config.gamma * _next_output
 
     def updateTargetFunc(self):
-        for tp, p in zip(
-                self.target_p_func.parameters(),
-                self.p_func.parameters(),
-        ):
-            tp.data = (1 - self.update_rate) * \
-                tp.data + self.update_rate * p.data
+        # for tp, p in zip(
+        #         self.target_p_func.parameters(),
+        #         self.p_func.parameters(),
+        # ):
+        #     tp.data = (1 - self.update_rate) * \
+        #         tp.data + self.update_rate * p.data
         for tp, p in zip(
                 self.target_q_func.parameters(),
                 self.q_func.parameters(),

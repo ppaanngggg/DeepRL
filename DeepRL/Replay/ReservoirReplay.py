@@ -1,23 +1,33 @@
+import typing
+from collections import deque
+
 import numpy as np
-from Replay import ReplayTuple
+
+from DeepRL.Env import EnvState
+from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
 class ReservoirReplay(object):
+    def __init__(self, _size=1e5):
+        self.size = int(_size)
+        self.memory_pool: typing.Deque[ReplayTuple] = deque(maxlen=self.size)
 
-    def __init__(self, _N=1e4):
-        self.N = int(_N)
-        self.memory_pool = []
-
-    def push(self, _state, _action, _reward, _next_state, _mask=None):
-        if len(self.memory_pool) == self.N:
-            idx = np.random.randint(0, self.N)
+    def push(
+            self, _state: EnvState,
+            _action: int, _reward: float,
+            _next_state: EnvState
+    ):
+        if len(self.memory_pool) >= self.size:
+            idx = np.random.randint(0, len(self.memory_pool))
             del self.memory_pool[idx]
         # store new tuples into tmp memory buffer
         self.memory_pool.append(
-            ReplayTuple(_state, _action, _reward, _next_state, _mask)
+            ReplayTuple(_state, _action, _reward, _next_state)
         )
 
-    def pull(self, _num):
+    def pull(
+            self, _num: int
+    ) -> typing.Sequence[ReplayTuple]:
         choices = []
         if len(self.memory_pool):
             choices = np.random.choice(
@@ -25,15 +35,10 @@ class ReservoirReplay(object):
                 min(len(self.memory_pool), _num),
                 replace=False,
             )
-        return [self.memory_pool[choice] for choice in choices], None
-
-    def setErr(self, _batch_tuples, _err_list):
-        pass
+        return [self.memory_pool[choice] for choice in choices]
 
     def merge(self):
         pass
 
-    def show(self):
-        print '!!! memory_pool !!!'
-        for t in self.memory_pool:
-            t.show()
+    def __repr__(self) -> str:
+        return '{}'.format(self.memory_pool)
