@@ -18,16 +18,16 @@ class DDPGAgent(AgentAbstract):
             _actor_model: nn.Module,
             _critic_model: nn.Module,
             _env: EnvAbstract,
-            _gamma: float = 0.9, _batch_size: int = 64,
-            _theta: typing.Union[float, np.ndarray] = 0.1,
-            _sigma: typing.Union[float, np.ndarray] = 0.1,
-            _update_rate: float = 0.001,
-            _replay: ReplayAbstract = None,
-            _actor_optimizer: optim.Optimizer = None,
-            _critic_optimizer: optim.Optimizer = None,
-            _action_clip: float = 1.0,
-            _gpu: bool = False,
-    ):
+            _gamma: float=0.9,
+            _batch_size: int=64,
+            _theta: typing.Union[float, np.ndarray]=0.1,
+            _sigma: typing.Union[float, np.ndarray]=0.1,
+            _update_rate: float=0.001,
+            _replay: ReplayAbstract=None,
+            _actor_optimizer: optim.Optimizer=None,
+            _critic_optimizer: optim.Optimizer=None,
+            _action_clip: float=1.0,
+            _gpu: bool=False, ):
         super().__init__(_env)
 
         # set config
@@ -83,20 +83,15 @@ class DDPGAgent(AgentAbstract):
             return np.clip(
                 self._action_random(a),
                 -self.config.action_clip,
-                self.config.action_clip,
-            )
+                self.config.action_clip, )
         else:
             return a
 
-    def func(
-            self, _x_data: np.ndarray, _train: bool = True
-    ) -> np.ndarray:
+    def func(self, _x_data: np.ndarray, _train: bool=True) -> np.ndarray:
         x_data = torch.from_numpy(_x_data).float()
         if self.config.gpu:
             x_data = x_data.cuda()
-        x_var = Variable(
-            x_data, volatile=not _train
-        )
+        x_var = Variable(x_data, volatile=not _train)
         output = self.p_func(x_var).data
         if self.config.gpu:
             output = output.cpu()
@@ -119,20 +114,16 @@ class DDPGAgent(AgentAbstract):
         # next_action = self.target_p_func(next_x) # choose action by stable model
         next_action = self.p_func(next_x)  # choose action by latest model
         next_output = self.target_q_func(
-            next_x, next_action
-        ).data # get next value by stable model
+            next_x, next_action).data  # get next value by stable model
         if self.config.gpu:
             next_output = next_output.cpu()
-        target_value = self.getQTargetData(
-            next_output.numpy(), next_action, _batch_tuples
-        )
+        target_value = self.getQTargetData(next_output.numpy(), next_action,
+                                           _batch_tuples)
         target_value = torch.from_numpy(target_value).float()
         if self.config.gpu:
             target_value = target_value.cuda()
         prev_output = self.q_func(prev_x, prev_action)
-        critic_loss = self.criterion(
-            prev_output, Variable(target_value)
-        )
+        critic_loss = self.criterion(prev_output, Variable(target_value))
 
         # update critic
         self.critic_optim.zero_grad()
@@ -149,10 +140,10 @@ class DDPGAgent(AgentAbstract):
         self.actor_optim.step()
 
     def getQTargetData(
-            self, _next_output: np.ndarray,
+            self,
+            _next_output: np.ndarray,
             _next_action: typing.Sequence[int],
-            _batch_tuples: typing.Sequence[ReplayTuple]
-    ) -> np.ndarray:
+            _batch_tuples: typing.Sequence[ReplayTuple]) -> np.ndarray:
         reward_list = [t.reward for t in _batch_tuples]
         reward_arr = np.expand_dims(np.array(reward_list), 1)
         return reward_arr + self.config.gamma * _next_output
@@ -166,7 +157,6 @@ class DDPGAgent(AgentAbstract):
         #         tp.data + self.update_rate * p.data
         for tp, p in zip(
                 self.target_q_func.parameters(),
-                self.q_func.parameters(),
-        ):
+                self.q_func.parameters(), ):
             tp.data = (1 - self.update_rate) * \
                 tp.data + self.update_rate * p.data

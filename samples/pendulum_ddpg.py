@@ -45,12 +45,8 @@ class DemoEnv(EnvAbstract):
             self.g.render()
         return reward / 10.
 
-    def getInputs(
-            self, _state_list: typing.Sequence[EnvState]
-    ) -> np.ndarray:
-        return np.array([
-            d.state for d in _state_list
-        ])
+    def getInputs(self, _state_list: typing.Sequence[EnvState]) -> np.ndarray:
+        return np.array([d.state for d in _state_list])
 
 
 class ActorModel(nn.Module):
@@ -86,15 +82,19 @@ if __name__ == '__main__':
     critic = CriticModel()
 
     agent = DDPGAgent(
-        _actor_model=actor, _critic_model=critic,
-        _env=DemoEnv(), _gamma=0.9, _batch_size=32,
-        _theta=0.15, _sigma=0.2, _update_rate=0.001,
+        _actor_model=actor,
+        _critic_model=critic,
+        _env=DemoEnv(),
+        _gamma=0.9,
+        _batch_size=32,
+        _theta=0.15,
+        _sigma=0.2,
+        _update_rate=0.001,
         _replay=NaiveReplay(),
         _actor_optimizer=optim.Adam(actor.parameters(), lr=1e-4),
         _critic_optimizer=optim.Adam(critic.parameters(), lr=1e-3),
         _action_clip=2.0,
-        _gpu=args.gpu
-    )
+        _gpu=args.gpu)
     agent.config.epoch_show_log = 10000
 
     train = Train(
@@ -103,6 +103,5 @@ if __name__ == '__main__':
         _step_init=1000,
         _step_train=1,
         _step_update_target=1,
-        _step_save=100000000,
-    )
+        _step_save=100000000, )
     train.run()

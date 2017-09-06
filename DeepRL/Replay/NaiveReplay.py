@@ -23,7 +23,7 @@ class NaiveReplay(ReplayAbstract):
         )
 
     def pull(
-            self, _num: int
+            self, _num: int = None
     ) -> typing.Sequence[ReplayTuple]:
         choices = []
         if len(self.memory_pool):

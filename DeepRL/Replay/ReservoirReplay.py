@@ -7,7 +7,7 @@ from DeepRL.Env import EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
-class ReservoirReplay(object):
+class ReservoirReplay(ReplayAbstract):
     def __init__(self, _size=1e5):
         self.size = int(_size)
         self.memory_pool: typing.Deque[ReplayTuple] = deque(maxlen=self.size)
@@ -26,7 +26,7 @@ class ReservoirReplay(object):
         )
 
     def pull(
-            self, _num: int
+            self, _num: int = None
     ) -> typing.Sequence[ReplayTuple]:
         choices = []
         if len(self.memory_pool):

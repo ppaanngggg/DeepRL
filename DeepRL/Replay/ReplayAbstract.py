@@ -37,7 +37,7 @@ class ReplayAbstract:
     ):
         raise NotImplementedError()
 
-    def pull(self, _num: int) -> typing.Sequence[ReplayTuple]:
+    def pull(self, _num: int=None) -> typing.Sequence[ReplayTuple]:
         raise NotImplementedError()
 
     def merge(self):

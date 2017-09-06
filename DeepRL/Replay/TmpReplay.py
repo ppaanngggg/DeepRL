@@ -1,27 +1,31 @@
-from Replay import ReplayTuple
+import typing
+from collections import deque
+
+from DeepRL.Env import EnvState
+from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
-class TmpReplay(object):
-
+class TmpReplay(ReplayAbstract):
     def __init__(self):
-        self.tmp_memory_pool = []
+        self.memory_pool: typing.Deque[ReplayTuple] = deque()
 
-    def push(self, _state, _action, _reward, _next_state, _mask=None):
+    def push(
+            self, _state: EnvState,
+            _action: int, _reward: float,
+            _next_state: EnvState
+    ):
         # store new tuples into tmp memory buffer
-        self.tmp_memory_pool.append(
-            ReplayTuple(_state, _action, _reward, _next_state, _mask)
+        self.memory_pool.append(
+            ReplayTuple(_state, _action, _reward, _next_state)
         )
 
-    def pull(self, _num):
-        return self.tmp_memory_pool, None
-
-    def setErr(self, _batch_tuples, _err_list):
-        pass
+    def pull(
+            self, _num: int = None
+    ) -> typing.Sequence[ReplayTuple]:
+        return self.memory_pool
 
     def merge(self):
-        self.tmp_memory_pool = []
+        self.memory_pool = deque()
 
-    def show(self):
-        print '!!! tmp_memory_pool !!!'
-        for t in self.tmp_memory_pool:
-            t.show()
+    def __repr__(self) -> str:
+        return '{}'.format(self.memory_pool)

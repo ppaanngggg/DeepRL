@@ -127,7 +127,7 @@ class AgentAbstract:
 
         return self.env.in_game
 
-    def chooseAction(self, _state: EnvState) -> int:
+    def chooseAction(self, _state: EnvState) -> typing.Union[int, np.ndarray]:
         """
         choose action by special model in special state,
         suitable for most agent
@@ -180,10 +180,8 @@ class AgentAbstract:
         if not len(batch_tuples):
             return
 
-        # train and
         self.doTrain(batch_tuples)
 
-        # set err and merge
         self.replay.merge()
 
     def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
@@ -243,7 +241,7 @@ class AgentAbstract:
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)
 
-    def save(self, _epoch: int, _step: int, _path: str='./save'):
+    def save(self, _epoch: int, _step: int, _path: str = './save'):
         if self.p_func is not None:
             torch.save(
                 self.p_func.state_dict(),
