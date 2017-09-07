@@ -19,7 +19,7 @@ class PPOAgent(AgentAbstract):
             _value_model: nn.Module,
             _env: EnvAbstract,
             _gamma: float = 0.9,
-            _tau: float = 0.97,
+            _tau: float = 0.95,
             _rate_clip: float = 0.2,
             _batch_size: int = 64,
             _train_epoch: int = 10,
@@ -119,7 +119,8 @@ class PPOAgent(AgentAbstract):
     ):
         status_var = self.np2var(_status)
         action_var = self.np2var(_action)
-        advantage_var = self.np2var(_advantage)
+        adv_var = self.np2var(_advantage)
+        advantage_var = (adv_var - adv_var.mean()) / adv_var.std()
 
         new_mean, new_log_std = self.p_func(status_var)
         old_mean, old_log_std = self.target_p_func(status_var)
