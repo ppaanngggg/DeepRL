@@ -21,6 +21,7 @@ class PPOAgent(AgentAbstract):
             _gamma: float = 0.9,
             _tau: float = 0.95,
             _rate_clip: float = 0.2,
+            _beta_entropy: float = 0.01,
             _batch_size: int = 64,
             _train_epoch: int = 10,
             _replay: ReplayAbstract = None,
@@ -33,6 +34,7 @@ class PPOAgent(AgentAbstract):
         self.config.gamma = _gamma
         self.config.tau = _tau  # gae
         self.config.rate_clip = _rate_clip  # clip for rate, 0.8 ~ 1.2 default
+        self.config.beta_entropy = _beta_entropy
         self.config.batch_size = _batch_size  # mini batch in a train callback
         self.config.train_epoch = _train_epoch  # epoch in a train callback
         self.config.action_clip = _action_clip
@@ -114,6 +116,10 @@ class PPOAgent(AgentAbstract):
             0.5 * np.log(2 * np.pi) - _log_std
         return log_prob.sum(1)
 
+    @staticmethod
+    def getEntropy(_log_std: Variable):
+        return 0.5 * np.log(2 * np.pi * np.e) + _log_std
+
     def trainPolicyModel(
             self, _status: np.ndarray, _action: np.ndarray, _advantage: np.ndarray
     ):
@@ -128,11 +134,14 @@ class PPOAgent(AgentAbstract):
         new_log_prob = self.getLogProb(action_var, new_mean, new_log_std)
         old_log_prob = self.getLogProb(action_var, old_mean, old_log_std)
 
+        entropy = self.getEntropy(new_log_std)
+
         rate = torch.exp(new_log_prob - old_log_prob)  # real prob rate
         rate_clip = torch.clamp(
             rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip)
         final_rate = torch.min(rate, rate_clip)
-        loss = -torch.mean(final_rate * advantage_var)
+        loss = -torch.mean(final_rate * advantage_var) - \
+            self.config.beta_entropy * entropy.mean()
 
         self.policy_optim.zero_grad()
         loss.backward()
