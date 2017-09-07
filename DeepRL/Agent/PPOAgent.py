@@ -96,6 +96,9 @@ class PPOAgent(AgentAbstract):
             prev_value = 0.0
             prev_return = 0.0
             prev_advantage = 0.0
+            for i in reversed(range(_batch_tuples)):
+
+
 
         # update old policy model
         self.target_p_func.load_state_dict(self.p_func.state_dict())
