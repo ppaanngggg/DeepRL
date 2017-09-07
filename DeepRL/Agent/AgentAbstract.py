@@ -29,6 +29,9 @@ class Config(object):
         self.gamma = None  # gamma, decay param of reward
         self.batch_size = None  # batch size of train
 
+        self.tau = None  # gae
+        self.train_epoch = None  # how many epoch to train in one train func
+
         # randomly choose action
         self.epsilon = None
         self.epsilon_decay = None
@@ -156,12 +159,9 @@ class AgentAbstract:
     def updateEpsilon(self):
         self.config.epsilon = max(
             self.config.epsilon_underline,
-            self.config.epsilon * self.config.epsilon_decay
-        )
+            self.config.epsilon * self.config.epsilon_decay)
 
-    def func(
-            self, _x_data: np.ndarray, _train: bool = True
-    ) -> np.ndarray:
+    def func(self, _x_data: np.ndarray, _train: bool=True) -> np.ndarray:
         """
         get the output of model
 
@@ -203,19 +203,19 @@ class AgentAbstract:
         return self.env.getInputs([t.next_state for t in _batch_tuples])
 
     def getActionData(
-            self, _shape: typing.Tuple[int],
-            _actions: typing.Sequence[int],
-    ) -> np.ndarray:
+            self,
+            _shape: typing.Tuple[int],
+            _actions: typing.Sequence[int], ) -> np.ndarray:
         action_data = np.zeros(_shape, dtype=np.float32)
         for i in range(len(_actions)):
             action_data[i, _actions[i]] = 1.
         return action_data
 
     def getQTargetData(
-            self, _next_output: np.ndarray,
+            self,
+            _next_output: np.ndarray,
             _next_action: typing.Sequence[int],
-            _batch_tuples: typing.Sequence[ReplayTuple]
-    ) -> np.ndarray:
+            _batch_tuples: typing.Sequence[ReplayTuple]) -> np.ndarray:
         target_data = np.zeros(len(_batch_tuples), np.float32)
         for i in range(len(_batch_tuples)):
             target_value = _batch_tuples[i].reward
@@ -241,19 +241,13 @@ class AgentAbstract:
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)
 
-    def save(self, _epoch: int, _step: int, _path: str = './save'):
+    def save(self, _epoch: int, _step: int, _path: str='./save'):
         if self.p_func is not None:
-            torch.save(
-                self.p_func.state_dict(),
-                '{}/p_{}_{}'.format(_path, _epoch, _step)
-            )
+            torch.save(self.p_func.state_dict(), '{}/p_{}_{}'.format(
+                _path, _epoch, _step))
         if self.q_func is not None:
-            torch.save(
-                self.q_func.state_dict(),
-                '{}/q_{}_{}'.format(_path, _epoch, _step)
-            )
+            torch.save(self.q_func.state_dict(), '{}/q_{}_{}'.format(
+                _path, _epoch, _step))
         if self.v_func is not None:
-            torch.save(
-                self.v_func.state_dict(),
-                '{}/v_{}_{}'.format(_path, _epoch, _step)
-            )
+            torch.save(self.v_func.state_dict(), '{}/v_{}_{}'.format(
+                _path, _epoch, _step))
