@@ -30,6 +30,7 @@ class Config(object):
         self.batch_size = None  # batch size of train
 
         self.tau = None  # gae
+        self.rate_clip = None  # clip for PPOAgent rate
         self.train_epoch = None  # how many epoch to train in one train func
 
         # randomly choose action
@@ -161,7 +162,7 @@ class AgentAbstract:
             self.config.epsilon_underline,
             self.config.epsilon * self.config.epsilon_decay)
 
-    def func(self, _x_data: np.ndarray, _train: bool=True) -> np.ndarray:
+    def func(self, _x_data: np.ndarray, _train: bool = True) -> np.ndarray:
         """
         get the output of model
 
@@ -241,7 +242,7 @@ class AgentAbstract:
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)
 
-    def save(self, _epoch: int, _step: int, _path: str='./save'):
+    def save(self, _epoch: int, _step: int, _path: str = './save'):
         if self.p_func is not None:
             torch.save(self.p_func.state_dict(), '{}/p_{}_{}'.format(
                 _path, _epoch, _step))

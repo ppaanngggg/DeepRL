@@ -5,12 +5,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from pendulum_ddpg import DemoEnv
 from torch.autograd import Variable
 
 from DeepRL.Agent import PPOAgent
 from DeepRL.Replay import TmpReplay
-from DeepRL.Train import Train
+from DeepRL.Train import TrainEpoch
+from pendulum_ddpg import DemoEnv
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -23,11 +23,11 @@ class PolicyModel(nn.Module):
         self.fc1 = nn.Linear(3, 30)
         self.fc2 = nn.Linear(30, 1)
 
-        self.std = nn.Parameter(torch.zeros(1))
+        self.log_std = nn.Parameter(torch.zeros(1))
 
     def forward(self, x: Variable):
         hidden = F.relu(self.fc1(x))
-        return F.tanh(self.fc2(hidden)) * 2.0, self.std
+        return F.tanh(self.fc2(hidden)) * 2.0, self.log_std
 
 
 class ValueModel(nn.Module):
@@ -60,11 +60,11 @@ if __name__ == '__main__':
         _gpu=args.gpu)
     agent.config.epoch_show_log = 10000
 
-    train = Train(
+    train = TrainEpoch(
         agent,
         _epoch_max=10000,
-        _step_init=1000,
-        _step_train=500,
-        _step_update_target=1,
-        _step_save=100000000, )
+        _epoch_train=5,
+        _epoch_update_target=100,
+        _epoch_save=100000,
+    )
     train.run()

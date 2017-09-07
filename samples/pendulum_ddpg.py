@@ -24,13 +24,11 @@ class DemoEnv(EnvAbstract):
         self.g = gym.make('Pendulum-v0')
         self.o: np.ndarray = None
         self.total_reward = 0.0
+        self.total_reward_list = []
         self.render = False
 
     def startNewGame(self):
         self.o = self.g.reset()
-        logger.info('total_reward: {}'.format(self.total_reward))
-        if not self.render and 0. > self.total_reward > -100.:
-            self.render = True
         self.total_reward = 0.0
         self.in_game = True
 
@@ -40,6 +38,11 @@ class DemoEnv(EnvAbstract):
     def doAction(self, _action: np.ndarray) -> float:
         self.o, reward, is_quit, _ = self.g.step(_action)
         self.in_game = not is_quit
+        if not self.in_game:
+            logger.info('total_reward: {}'.format(self.total_reward))
+            self.total_reward_list.append(self.total_reward)
+            if not self.render and np.mean(self.total_reward_list[-5:]) > -200:
+                self.render = True
         self.total_reward += reward
         if self.render:
             self.g.render()
@@ -80,11 +83,12 @@ if __name__ == '__main__':
 
     actor = ActorModel()
     critic = CriticModel()
+    env = DemoEnv()
 
     agent = DDPGAgent(
         _actor_model=actor,
         _critic_model=critic,
-        _env=DemoEnv(),
+        _env=env,
         _gamma=0.9,
         _batch_size=32,
         _theta=0.15,
@@ -99,9 +103,10 @@ if __name__ == '__main__':
 
     train = Train(
         agent,
-        _epoch_max=10000,
+        _epoch_max=2000,
         _step_init=1000,
         _step_train=1,
         _step_update_target=1,
-        _step_save=100000000, )
+        _step_save=100000000,
+    )
     train.run()

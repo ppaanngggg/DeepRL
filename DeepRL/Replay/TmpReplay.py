@@ -1,5 +1,4 @@
 import typing
-from collections import deque
 
 from DeepRL.Env import EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
@@ -7,7 +6,7 @@ from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 class TmpReplay(ReplayAbstract):
     def __init__(self):
-        self.memory_pool: typing.Deque[ReplayTuple] = deque()
+        self.memory_pool: typing.List[ReplayTuple] = []
 
     def push(
             self, _state: EnvState,
@@ -25,7 +24,7 @@ class TmpReplay(ReplayAbstract):
         return self.memory_pool
 
     def merge(self):
-        self.memory_pool = deque()
+        self.memory_pool = []
 
     def __repr__(self) -> str:
         return '{}'.format(self.memory_pool)
