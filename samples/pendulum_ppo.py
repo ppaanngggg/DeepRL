@@ -53,6 +53,7 @@ if __name__ == '__main__':
         _policy_model=policy_model,
         _value_model=value_model,
         _env=DemoEnv(),
+        _beta_entropy=0.1,
         _replay=TmpReplay(),
         _policy_optimizer=optim.Adam(policy_model.parameters(), 1e-4),
         _value_optimizer=optim.Adam(value_model.parameters(), 1e-4),
