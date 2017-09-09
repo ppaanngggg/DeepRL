@@ -1,6 +1,7 @@
 import typing
 from copy import deepcopy
 
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -113,12 +114,13 @@ class PPOAgent(AgentAbstract):
         std = torch.exp(_log_std)
         var = torch.pow(std, 2)
         log_prob: Variable = -torch.pow(_action - _mean, 2) / (2.0 * var) - \
-            0.5 * np.log(2 * np.pi) - _log_std
+            0.5 * math.log(2 * math.pi) - _log_std
         return log_prob.sum(1)
 
     @staticmethod
     def getEntropy(_log_std: Variable):
-        return 0.5 * np.log(2 * np.pi * np.e) + _log_std
+        term = 0.5 * math.log(2 * math.pi * math.e)
+        return term + _log_std
 
     def trainPolicyModel(
             self, _status: np.ndarray, _action: np.ndarray, _advantage: np.ndarray
