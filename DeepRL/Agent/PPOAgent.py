@@ -126,7 +126,6 @@ class PPOAgent(AgentAbstract):
         status_var = self.np2var(_status)
         action_var = self.np2var(_action)
         adv_var = self.np2var(_advantage)
-        advantage_var = (adv_var - adv_var.mean()) / adv_var.std()
 
         new_mean, new_log_std = self.p_func(status_var)
         old_mean, old_log_std = self.target_p_func(status_var)
@@ -140,7 +139,7 @@ class PPOAgent(AgentAbstract):
         rate_clip = torch.clamp(
             rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip)
         final_rate = torch.min(rate, rate_clip)
-        loss = -torch.mean(final_rate * advantage_var) - \
+        loss = -torch.mean(final_rate * adv_var) - \
             self.config.beta_entropy * entropy.mean()
 
         self.policy_optim.zero_grad()
@@ -176,6 +175,9 @@ class PPOAgent(AgentAbstract):
             prev_value = value_arr[i]
             prev_return = return_arr[i]
             prev_advantage = advantage_arr[i]
+
+        advantage_arr = (advantage_arr - advantage_arr.mean()
+                         ) / advantage_arr.std()
 
         for _ in range(self.config.train_epoch):  # train several epochs
             rand_idx = np.random.permutation(len(status_arr))
