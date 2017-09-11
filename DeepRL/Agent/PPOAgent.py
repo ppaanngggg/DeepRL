@@ -1,7 +1,7 @@
+import math
 import typing
 from copy import deepcopy
 
-import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -61,41 +61,28 @@ class PPOAgent(AgentAbstract):
 
     def chooseAction(self, _state: EnvState) -> np.ndarray:
         x_data = self.env.getInputs([_state])
-        x_data = torch.from_numpy(x_data).float()
-        if self.config.gpu:
-            x_data = x_data.cuda()
-        x_var = Variable(x_data, volatile=True)
+        x_var = self.np2var(x_data, True)
         action_mean, action_log_std = self.p_func(x_var)
-        if self.config.gpu:
-            action_mean = action_mean.cpu()
-            action_log_std = action_log_std.cpu()
+        action_mean = action_mean.data
+        action_log_std = action_log_std.data
 
         if self.config.is_train:
-            random_action = np.random.normal(
-                action_mean.data.numpy()[0],
-                np.exp(action_log_std.data.numpy()), )
-            np.clip(
-                random_action,
-                -self.config.action_clip,
-                self.config.action_clip,
-                out=random_action, )
-            return random_action
+            action_std = action_log_std.exp().expand_as(action_mean)
+            random_action = torch.normal(action_mean, action_std)
+            random_action.clamp_(
+                -self.config.action_clip, self.config.action_clip
+            )
+            if self.config.gpu:
+                random_action = random_action.cpu()
+            return random_action.numpy()[0]
         else:
             return action_mean.data.numpy()[0]
 
     def np2var(self, _np_arr: np.ndarray, _volatile: bool = False) -> Variable:
-        tmp = torch.from_numpy(_np_arr).float()
+        tmp = torch.from_numpy(_np_arr)
         if self.config.gpu:
             tmp = tmp.cuda()
         return Variable(tmp, volatile=_volatile)
-
-    def getValues(self, _x: np.ndarray) -> np.ndarray:
-        x_var = self.np2var(_x, _volatile=True)
-        values = self.v_func(x_var).data
-        if self.config.gpu:
-            values = values.cpu()
-        values.squeeze_()
-        return values.numpy()
 
     def trainValueModel(self, _x: np.ndarray, _target: np.ndarray):
         x_var = self.np2var(_x)
@@ -113,8 +100,8 @@ class PPOAgent(AgentAbstract):
     def getLogProb(_action: Variable, _mean: Variable, _log_std: Variable):
         std = torch.exp(_log_std)
         var = torch.pow(std, 2)
-        log_prob: Variable = -torch.pow(_action - _mean, 2) / (2.0 * var) - \
-            0.5 * math.log(2 * math.pi) - _log_std
+        log_prob = -torch.pow(_action - _mean, 2) / (2.0 * var)
+        log_prob = log_prob - 0.5 * math.log(2 * math.pi) - _log_std
         return log_prob.sum(1)
 
     @staticmethod
@@ -148,15 +135,23 @@ class PPOAgent(AgentAbstract):
         loss.backward()
         self.policy_optim.step()
 
-    def doTrain(self, _batch_tuples: typing.List[ReplayTuple]):
+    def getValues(self, _x: np.ndarray) -> np.ndarray:
+        x_var = self.np2var(_x, _volatile=True)
+        values = self.v_func(x_var).data
+        if self.config.gpu:
+            values = values.cpu()
+        values.squeeze_()
+        return values.numpy()
+
+    def getDataset(self, _batch_tuples: typing.List[ReplayTuple]):
         status_arr = self.getPrevInputs(_batch_tuples)
         action_arr = np.array([d.action for d in _batch_tuples])
 
         # get value model's value of status
         value_arr = self.getValues(status_arr)
         # alloc space for true returns and advantages
-        return_arr = np.zeros(len(_batch_tuples))  # train value model
-        advantage_arr = np.zeros(len(_batch_tuples))  # train policy model
+        return_arr = np.zeros(len(_batch_tuples), dtype=np.float32)
+        adv_arr = np.zeros(len(_batch_tuples), dtype=np.float32)
 
         prev_value = 0.0
         prev_return = 0.0
@@ -168,18 +163,23 @@ class PPOAgent(AgentAbstract):
                     self.config.gamma * prev_return
                 delta = batch_tuple.reward + \
                     self.config.gamma * prev_value - value_arr[i]
-                advantage_arr[i] = delta + self.config.gamma * \
+                adv_arr[i] = delta + self.config.gamma * \
                     self.config.tau * prev_advantage
             else:  # if game ends
                 return_arr[i] = batch_tuple.reward
                 delta = batch_tuple.reward - value_arr[i]
-                advantage_arr[i] = delta
+                adv_arr[i] = delta
             prev_value = value_arr[i]
             prev_return = return_arr[i]
-            prev_advantage = advantage_arr[i]
+            prev_advantage = adv_arr[i]
 
-        advantage_arr = (advantage_arr - advantage_arr.mean()
-                         ) / advantage_arr.std()
+        adv_arr = (adv_arr - adv_arr.mean()) / adv_arr.std()
+
+        return status_arr, action_arr, return_arr, adv_arr
+
+    def doTrain(self, _batch_tuples: typing.List[ReplayTuple]):
+        status_arr, action_arr, return_arr, advantage_arr = self.getDataset(
+            _batch_tuples)
 
         for _ in range(self.config.train_epoch):  # train several epochs
             rand_idx = np.random.permutation(len(status_arr))

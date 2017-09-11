@@ -10,7 +10,7 @@ from torch.autograd import Variable
 from DeepRL.Agent import PPOAgent
 from DeepRL.Replay import TmpReplay
 from DeepRL.Train import TrainEpoch
-from pendulum_ddpg import DemoEnv
+from envs.pendulum_env import DemoEnv
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         _policy_model=policy_model,
         _value_model=value_model,
         _env=DemoEnv(),
-        _beta_entropy=0.1,
+        _beta_entropy=0.01,
         _replay=TmpReplay(),
         _policy_optimizer=optim.Adam(policy_model.parameters(), 1e-4),
         _value_optimizer=optim.Adam(value_model.parameters(), 1e-4),
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     train = TrainEpoch(
         agent,
-        _epoch_max=10000,
+        _epoch_max=50,
         _epoch_train=5,
         _epoch_update_target=100,
         _epoch_save=100000,
