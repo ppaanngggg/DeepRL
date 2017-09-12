@@ -84,9 +84,9 @@ class PPOAgent(AgentAbstract):
             tmp = tmp.cuda()
         return Variable(tmp, volatile=_volatile)
 
-    def trainValueModel(self, _x: np.ndarray, _target: np.ndarray):
-        x_var = self.np2var(_x)
-        target_var = self.np2var(_target)
+    def trainValueModel(self, _x, _target):
+        x_var = Variable(_x)
+        target_var = Variable(_target)
 
         self.value_optim.zero_grad()
 
@@ -110,11 +110,11 @@ class PPOAgent(AgentAbstract):
         return term + _log_std
 
     def trainPolicyModel(
-            self, _status: np.ndarray, _action: np.ndarray, _advantage: np.ndarray
+            self, _status, _action, _advantage
     ):
-        status_var = self.np2var(_status)
-        action_var = self.np2var(_action)
-        adv_var = self.np2var(_advantage)
+        status_var = Variable(_status)
+        action_var = Variable(_action)
+        adv_var = Variable(_advantage)
 
         new_mean, new_log_std = self.p_func(status_var)
         old_mean, old_log_std = self.target_p_func(status_var)
@@ -173,7 +173,6 @@ class PPOAgent(AgentAbstract):
             prev_return = return_arr[i]
             prev_advantage = adv_arr[i]
 
-
         return status_arr, action_arr, return_arr, adv_arr
 
     def doTrain(
@@ -181,32 +180,41 @@ class PPOAgent(AgentAbstract):
             _dataset=None
     ):
         if _dataset is not None:
-            status_arr, action_arr, return_arr, advantage_arr = _dataset
+            status_arr, action_arr, return_arr, adv_arr = _dataset
         elif _batch_tuples is not None:
-            status_arr, action_arr, return_arr, advantage_arr = self.getDataset(
+            status_arr, action_arr, return_arr, adv_arr = self.getDataset(
                 _batch_tuples)
         else:
             raise Exception('_batch_tuples and _dataset are both None')
 
-        advantage_arr = (advantage_arr - advantage_arr.mean()) / advantage_arr.std()
+        status_arr = torch.from_numpy(status_arr)
+        action_arr = torch.from_numpy(action_arr)
+        return_arr = torch.from_numpy(return_arr)
+        adv_arr = torch.from_numpy(adv_arr)
+        if self.config.gpu:
+            status_arr = status_arr.cuda()
+            action_arr = action_arr.cuda()
+            return_arr = return_arr.cuda()
+            adv_arr = adv_arr.cuda()
+        advantage_arr = (adv_arr - adv_arr.mean()) / adv_arr.std()
 
         for _ in range(self.config.train_epoch):  # train several epochs
             rand_idx = np.random.permutation(len(status_arr))
-            rand_status_arr = status_arr[rand_idx]
-            rand_action_arr = action_arr[rand_idx]
-            rand_return_arr = return_arr[rand_idx]
-            rand_advantage_arr = advantage_arr[rand_idx]
-
             for begin_idx in range(0, len(rand_idx), self.config.batch_size):
                 end_idx = begin_idx + self.config.batch_size
+                batch_idx = torch.from_numpy(rand_idx[begin_idx:end_idx])
+                if self.config.gpu:
+                    batch_idx = batch_idx.cuda()
 
-                batch_status_arr = rand_status_arr[begin_idx:end_idx]
-                batch_action_arr = rand_action_arr[begin_idx:end_idx]
-                batch_return_arr = rand_return_arr[begin_idx:end_idx]
-                batch_advantage_arr = rand_advantage_arr[begin_idx:end_idx]
+                batch_status_arr = status_arr[batch_idx]
+                batch_action_arr = action_arr[batch_idx]
+                batch_return_arr = return_arr[batch_idx]
+                batch_advantage_arr = advantage_arr[batch_idx]
 
-                self.trainValueModel(_x=batch_status_arr,
-                                     _target=batch_return_arr)
+                self.trainValueModel(
+                    _x=batch_status_arr,
+                    _target=batch_return_arr
+                )
                 self.trainPolicyModel(
                     _status=batch_status_arr,
                     _action=batch_action_arr,
