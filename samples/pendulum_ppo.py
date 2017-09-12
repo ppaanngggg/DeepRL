@@ -75,7 +75,7 @@ if __name__ == '__main__':
     else:
         train = TrainEpoch(
             agent,
-            _epoch_max=50,
+            _epoch_max=1000,
             _epoch_train=5,
             _epoch_update_target=100,
             _epoch_save=100000,
