@@ -173,7 +173,6 @@ class PPOAgent(AgentAbstract):
             prev_return = return_arr[i]
             prev_advantage = adv_arr[i]
 
-        adv_arr = (adv_arr - adv_arr.mean()) / adv_arr.std()
 
         return status_arr, action_arr, return_arr, adv_arr
 
@@ -188,6 +187,8 @@ class PPOAgent(AgentAbstract):
                 _batch_tuples)
         else:
             raise Exception('_batch_tuples and _dataset are both None')
+
+        advantage_arr = (advantage_arr - advantage_arr.mean()) / advantage_arr.std()
 
         for _ in range(self.config.train_epoch):  # train several epochs
             rand_idx = np.random.permutation(len(status_arr))
