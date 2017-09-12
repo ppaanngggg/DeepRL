@@ -172,20 +172,24 @@ class AgentAbstract:
         """
         raise NotImplementedError
 
-    def train(self):
+    def train(self, _dataset=None):
         """
         train model
         """
-        # pull tuples from memory pool
-        batch_tuples = self.replay.pull(self.config.batch_size)
-        if not len(batch_tuples):
-            return
+        if _dataset is None:
+            # pull tuples from memory pool
+            batch_tuples = self.replay.pull(self.config.batch_size)
+            if not len(batch_tuples):
+                return
+            self.doTrain(batch_tuples)
+            self.replay.merge()
+        else:
+            self.doTrain(None, _dataset)
 
-        self.doTrain(batch_tuples)
-
-        self.replay.merge()
-
-    def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
+    def doTrain(
+            self, _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
+            _dataset=None
+    ):
         """
         do train detail, need to be overwritten
         """
@@ -202,6 +206,9 @@ class AgentAbstract:
         get and stack next inputs from tuples
         """
         return self.env.getInputs([t.next_state for t in _batch_tuples])
+
+    def getDataset(self, _batch_tuples: typing.List[ReplayTuple]):
+        raise NotImplementedError
 
     def getActionData(
             self,

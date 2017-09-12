@@ -35,8 +35,8 @@ class DemoEnv(EnvAbstract):
         if not self.in_game:
             logger.info('total_reward: {}'.format(self.total_reward))
             self.total_reward_list.append(self.total_reward)
-            if not self.render and np.mean(self.total_reward_list[-10:]) > -200:
-                self.render = True
+            # if not self.render and np.mean(self.total_reward_list[-10:]) > -200:
+            #     self.render = True
         self.total_reward += reward
         if self.render:
             self.g.render()

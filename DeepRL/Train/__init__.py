@@ -1,2 +1,3 @@
-from .Train import Train, TrainEpoch
-# from .AsynTrain import AsynTrain
+from .AsynTrainEpoch import AsynTrainEpoch
+from .Train import Train
+from .TrainEpoch import TrainEpoch

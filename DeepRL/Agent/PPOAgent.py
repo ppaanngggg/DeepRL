@@ -76,7 +76,7 @@ class PPOAgent(AgentAbstract):
                 random_action = random_action.cpu()
             return random_action.numpy()[0]
         else:
-            return action_mean.data.numpy()[0]
+            return action_mean.numpy()[0]
 
     def np2var(self, _np_arr: np.ndarray, _volatile: bool = False) -> Variable:
         tmp = torch.from_numpy(_np_arr)
@@ -129,7 +129,7 @@ class PPOAgent(AgentAbstract):
             rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip)
         final_rate = torch.min(rate, rate_clip)
         loss = -torch.mean(final_rate * adv_var) - \
-            self.config.beta_entropy * entropy.mean()
+               self.config.beta_entropy * entropy.mean()
 
         self.policy_optim.zero_grad()
         loss.backward()
@@ -160,11 +160,11 @@ class PPOAgent(AgentAbstract):
             batch_tuple = _batch_tuples.pop()
             if batch_tuple.next_state.in_game:  # if game still continues
                 return_arr[i] = batch_tuple.reward + \
-                    self.config.gamma * prev_return
+                                self.config.gamma * prev_return
                 delta = batch_tuple.reward + \
-                    self.config.gamma * prev_value - value_arr[i]
+                        self.config.gamma * prev_value - value_arr[i]
                 adv_arr[i] = delta + self.config.gamma * \
-                    self.config.tau * prev_advantage
+                                     self.config.tau * prev_advantage
             else:  # if game ends
                 return_arr[i] = batch_tuple.reward
                 delta = batch_tuple.reward - value_arr[i]
@@ -177,9 +177,17 @@ class PPOAgent(AgentAbstract):
 
         return status_arr, action_arr, return_arr, adv_arr
 
-    def doTrain(self, _batch_tuples: typing.List[ReplayTuple]):
-        status_arr, action_arr, return_arr, advantage_arr = self.getDataset(
-            _batch_tuples)
+    def doTrain(
+            self, _batch_tuples: typing.Union[None, typing.List[ReplayTuple]],
+            _dataset=None
+    ):
+        if _dataset is not None:
+            status_arr, action_arr, return_arr, advantage_arr = _dataset
+        elif _batch_tuples is not None:
+            status_arr, action_arr, return_arr, advantage_arr = self.getDataset(
+                _batch_tuples)
+        else:
+            raise Exception('_batch_tuples and _dataset are both None')
 
         for _ in range(self.config.train_epoch):  # train several epochs
             rand_idx = np.random.permutation(len(status_arr))

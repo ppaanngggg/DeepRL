@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 from DeepRL.Agent import PPOAgent
 from DeepRL.Replay import TmpReplay
-from DeepRL.Train import TrainEpoch
+from DeepRL.Train import AsynTrainEpoch, TrainEpoch
 from envs.pendulum_env import DemoEnv
 
 logger = logging.getLogger()
@@ -43,6 +43,7 @@ class ValueModel(nn.Module):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--asyn', action='store_true')
     parser.add_argument('--gpu', action='store_true')
     args = parser.parse_args()
 
@@ -61,11 +62,22 @@ if __name__ == '__main__':
         _gpu=args.gpu)
     agent.config.epoch_show_log = 10000
 
-    train = TrainEpoch(
-        agent,
-        _epoch_max=50,
-        _epoch_train=5,
-        _epoch_update_target=100,
-        _epoch_save=100000,
-    )
-    train.run()
+    if args.asyn:
+        train = AsynTrainEpoch(
+            agent,
+            _epoch_max=1000,
+            _epoch_train=5,
+            _train_update_target=100,
+            _train_save=100000,
+            _process_core=5
+        )
+        train.run()
+    else:
+        train = TrainEpoch(
+            agent,
+            _epoch_max=1000,
+            _epoch_train=5,
+            _epoch_update_target=100,
+            _epoch_save=100000,
+        )
+        train.run()
