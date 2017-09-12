@@ -129,7 +129,7 @@ class PPOAgent(AgentAbstract):
             rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip)
         final_rate = torch.min(rate, rate_clip)
         loss = -torch.mean(final_rate * adv_var) - \
-               self.config.beta_entropy * entropy.mean()
+            self.config.beta_entropy * entropy.mean()
 
         self.policy_optim.zero_grad()
         loss.backward()
@@ -160,11 +160,11 @@ class PPOAgent(AgentAbstract):
             batch_tuple = _batch_tuples.pop()
             if batch_tuple.next_state.in_game:  # if game still continues
                 return_arr[i] = batch_tuple.reward + \
-                                self.config.gamma * prev_return
+                    self.config.gamma * prev_return
                 delta = batch_tuple.reward + \
-                        self.config.gamma * prev_value - value_arr[i]
+                    self.config.gamma * prev_value - value_arr[i]
                 adv_arr[i] = delta + self.config.gamma * \
-                                     self.config.tau * prev_advantage
+                    self.config.tau * prev_advantage
             else:  # if game ends
                 return_arr[i] = batch_tuple.reward
                 delta = batch_tuple.reward - value_arr[i]
@@ -199,13 +199,12 @@ class PPOAgent(AgentAbstract):
         advantage_arr = (adv_arr - adv_arr.mean()) / adv_arr.std()
 
         for _ in range(self.config.train_epoch):  # train several epochs
-            rand_idx = np.random.permutation(len(status_arr))
+            rand_idx = torch.from_numpy(np.random.permutation(len(status_arr)))
+            if self.config.gpu:
+                rand_idx = rand_idx.cuda()
             for begin_idx in range(0, len(rand_idx), self.config.batch_size):
                 end_idx = begin_idx + self.config.batch_size
-                batch_idx = torch.from_numpy(rand_idx[begin_idx:end_idx])
-                if self.config.gpu:
-                    batch_idx = batch_idx.cuda()
-
+                batch_idx = rand_idx[begin_idx:end_idx]
                 batch_status_arr = status_arr[batch_idx]
                 batch_action_arr = action_arr[batch_idx]
                 batch_return_arr = return_arr[batch_idx]

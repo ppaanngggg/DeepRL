@@ -12,26 +12,6 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def loop_env(_agent: AgentAbstract, _epoch_num: int):
-    logger.info('Start new game: {}'.format(_epoch_num))
-
-    _agent.startNewGame()
-    while _agent.step():
-        pass
-
-    return _agent.getDataset(_agent.replay.pull())
-
-
-def merge_dataset(_dataset_list):
-    tuple_len = len(_dataset_list[0])
-    dataset = []
-    for i in range(tuple_len):
-        dataset.append(np.concatenate([
-            tmp[i] for tmp in _dataset_list
-        ]))
-    return dataset
-
-
 class AsynTrainEpoch:
     def __init__(
             self,
@@ -62,12 +42,32 @@ class AsynTrainEpoch:
         if self.use_cmd:
             self.shell = TrainShell(self)
 
+    @staticmethod
+    def loop_env(_agent: AgentAbstract, _epoch_num: int):
+        logger.info('Start new game: {}'.format(_epoch_num))
+
+        _agent.startNewGame()
+        while _agent.step():
+            pass
+
+        return _agent.getDataset(_agent.replay.pull())
+
+    @staticmethod
+    def merge_dataset(_dataset_list):
+        tuple_len = len(_dataset_list[0])
+        dataset = []
+        for i in range(tuple_len):
+            dataset.append(np.concatenate([
+                tmp[i] for tmp in _dataset_list
+            ]))
+        return dataset
+
     def run(self):
         self.train_times = 0
         while self.epoch < self.epoch_max:
             # multiprocessing to get dataset
             dataset_list = self.pool.starmap(
-                loop_env,
+                AsynTrainEpoch.loop_env,
                 [(self.agent, tmp) for tmp in range(
                     self.epoch, self.epoch + self.epoch_train
                 )]
@@ -75,7 +75,7 @@ class AsynTrainEpoch:
             self.epoch += self.epoch_train
 
             # train model
-            dataset = merge_dataset(dataset_list)
+            dataset = AsynTrainEpoch.merge_dataset(dataset_list)
             self.agent.train(dataset)
 
             self.train_times += 1
