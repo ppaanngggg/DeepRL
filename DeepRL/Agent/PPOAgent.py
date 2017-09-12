@@ -211,8 +211,10 @@ class PPOAgent(AgentAbstract):
                 batch_return_arr = return_arr[batch_idx]
                 batch_advantage_arr = advantage_arr[batch_idx]
 
-                self.trainValueModel(_x=batch_status_arr,
-                                     _target=batch_return_arr)
+                self.trainValueModel(
+                    _x=batch_status_arr,
+                    _target=batch_return_arr
+                )
                 self.trainPolicyModel(
                     _status=batch_status_arr,
                     _action=batch_action_arr,
