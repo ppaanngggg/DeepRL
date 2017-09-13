@@ -1,3 +1,4 @@
+import logging
 import math
 import typing
 from copy import deepcopy
@@ -11,6 +12,9 @@ from torch.autograd import Variable
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 from DeepRL.Env import EnvAbstract, EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 class PPOAgent(AgentAbstract):
@@ -205,7 +209,8 @@ class PPOAgent(AgentAbstract):
             adv_arr = adv_arr.cuda()
         advantage_arr = (adv_arr - adv_arr.mean()) / adv_arr.std()
 
-        for _ in range(self.config.train_epoch):  # train several epochs
+        for i in range(self.config.train_epoch):  # train several epochs
+            logger.info('Train epoch: {}'.format(i))
             rand_idx = torch.from_numpy(np.random.permutation(len(status_arr)))
             if self.config.gpu:
                 rand_idx = rand_idx.cuda()
