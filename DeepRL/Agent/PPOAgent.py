@@ -62,6 +62,8 @@ class PPOAgent(AgentAbstract):
     def chooseAction(self, _state: EnvState) -> np.ndarray:
         x_data = self.env.getInputs([_state])
         x_var = self.np2var(x_data, True)
+
+        self.p_func.eval()
         action_mean, action_log_std = self.p_func(x_var)
         action_mean = action_mean.data
         action_log_std = action_log_std.data
@@ -90,6 +92,7 @@ class PPOAgent(AgentAbstract):
 
         self.value_optim.zero_grad()
 
+        self.v_func.train()
         output = self.v_func(x_var)
         loss = self.criterion(output, target_var)
         loss.backward()
@@ -116,6 +119,10 @@ class PPOAgent(AgentAbstract):
         action_var = Variable(_action)
         adv_var = Variable(_advantage)
 
+        self.policy_optim.zero_grad()
+
+        self.p_func.train()
+        self.target_p_func.train()
         new_mean, new_log_std = self.p_func(status_var)
         old_mean, old_log_std = self.target_p_func(status_var)
 
@@ -131,8 +138,8 @@ class PPOAgent(AgentAbstract):
         loss = -torch.mean(final_rate * adv_var) - \
             self.config.beta_entropy * entropy.mean()
 
-        self.policy_optim.zero_grad()
         loss.backward()
+
         self.policy_optim.step()
 
     def getValues(self, _x: np.ndarray) -> np.ndarray:
