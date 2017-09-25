@@ -3,6 +3,7 @@ import sys
 from select import select
 
 from DeepRL.Agent.AgentAbstract import AgentAbstract
+from DeepRL.Env import EnvAbstract
 from DeepRL.Train.TrainShell import TrainShell
 
 logger = logging.getLogger()
@@ -13,6 +14,7 @@ class TrainEpoch:
     def __init__(
             self,
             _agent: AgentAbstract,
+            _env: EnvAbstract,
             _epoch_max: int,
             _epoch_train: int,
             _epoch_update_target: int,
@@ -23,11 +25,15 @@ class TrainEpoch:
         self.agent: AgentAbstract = _agent
         self.agent.training()  # set to training mode
 
+        self.env = _env
+
         self.epoch = 0
         self.epoch_max = _epoch_max
         self.epoch_train = _epoch_train
         self.epoch_update_target = _epoch_update_target
         self.epoch_save = _epoch_save
+
+        self.total_reward_buf = []
 
         self.save_path = _save_path
         self.use_cmd = _use_cmd
@@ -35,6 +41,7 @@ class TrainEpoch:
             self.shell = TrainShell(self)
 
     def run(self):
+        tmp_reward_buf = []
         while self.epoch < self.epoch_max:
             logger.info('Start new game: {}'.format(self.epoch))
 
@@ -44,9 +51,12 @@ class TrainEpoch:
             # step until game finishes
             while self.agent.step():
                 pass
+            tmp_reward_buf.append(self.env.total_reward)
 
             if not self.epoch % self.epoch_train:
                 self.agent.train()
+                self.total_reward_buf.append(tmp_reward_buf)
+                tmp_reward_buf = []
             if not self.epoch % self.epoch_update_target:
                 self.agent.updateTargetFunc()
             if not self.epoch % self.epoch_save:

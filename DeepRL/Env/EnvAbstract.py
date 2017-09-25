@@ -1,12 +1,14 @@
 import typing
 
 import numpy as np
+
 from DeepRL.Env.EnvState import EnvState
 
 
 class EnvAbstract(object):
     def __init__(self):
         self.in_game = False
+        self.total_reward = None
 
     def startNewGame(self):
         """
