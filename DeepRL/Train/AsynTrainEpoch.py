@@ -14,6 +14,20 @@ logger.setLevel(logging.INFO)
 
 
 class AsynTrainEpoch:
+    """
+    Asyn train for epoch algorithm like PPO
+
+    _agent: the agent to be trained
+    _env: the env object
+    _epoch_max: the max epoch to play games
+    _epoch_train: train model after how many games
+    _train_update_target: update target after how many training
+    _train_save: save model after how many training
+    _process_core: how many cores to play games simultaneously
+    _save_path: where to save models
+    _use_cmd: whether to enable cmdtool while training
+    """
+
     def __init__(
             self,
             _agent: AgentAbstract,
@@ -30,10 +44,12 @@ class AsynTrainEpoch:
         self.agent.training()
         self.env: EnvAbstract = _env
 
+        # multiprocessing for sampling
         self.mp = mp.get_context('spawn')
         self.process_core = _process_core
         self.pool = self.mp.Pool(self.process_core)
 
+        # training control
         self.epoch = 0
         self.epoch_max = _epoch_max
         self.epoch_train = _epoch_train

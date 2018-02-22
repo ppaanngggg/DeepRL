@@ -2,6 +2,13 @@ import typing
 
 
 class EnvState(object):
+    """
+    This is the env state tuple, which will be stored in replay buffer
+
+    _in_game: whether it is in game
+    _state: env data
+    """
+
     def __init__(
             self, _in_game: bool,
             _state: typing.Any

@@ -49,22 +49,25 @@ if __name__ == '__main__':
 
     policy_model = PolicyModel()
     value_model = ValueModel()
+    env = DemoEnv()
 
     agent = PPOAgent(
         _policy_model=policy_model,
         _value_model=value_model,
-        _env=DemoEnv(),
+        _env=env,
         _beta_entropy=0.01,
         _replay=TmpReplay(),
         _policy_optimizer=optim.Adam(policy_model.parameters(), 1e-4),
         _value_optimizer=optim.Adam(value_model.parameters(), 1e-4),
         _action_clip=2.0,
-        _gpu=args.gpu)
+        _gpu=args.gpu
+    )
     agent.config.epoch_show_log = 10000
 
     if args.asyn:
         train = AsynTrainEpoch(
-            agent,
+            _agent=agent,
+            _env=env,
             _epoch_max=1000,
             _epoch_train=5,
             _train_update_target=100,
@@ -74,7 +77,8 @@ if __name__ == '__main__':
         train.run()
     else:
         train = TrainEpoch(
-            agent,
+            _agent=agent,
+            _env=env,
             _epoch_max=1000,
             _epoch_train=5,
             _epoch_update_target=100,

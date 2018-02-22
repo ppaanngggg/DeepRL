@@ -16,7 +16,6 @@ class DemoEnv(EnvAbstract):
         self.g = gym.make('Pendulum-v0')
         self.o: np.ndarray = None
         self.total_reward = 0.0
-        self.total_reward_list = []
         self.render = False
 
     def startNewGame(self):
@@ -34,9 +33,8 @@ class DemoEnv(EnvAbstract):
         self.in_game = not is_quit
         if not self.in_game:
             logger.info('total_reward: {}'.format(self.total_reward))
-            self.total_reward_list.append(self.total_reward)
-            # if not self.render and np.mean(self.total_reward_list[-10:]) > -200:
-            #     self.render = True
+            if not self.render and self.total_reward > -200:
+                self.render = True
         self.total_reward += reward
         if self.render:
             self.g.render()
@@ -44,3 +42,18 @@ class DemoEnv(EnvAbstract):
 
     def getInputs(self, _state_list: typing.Sequence[EnvState]) -> np.ndarray:
         return np.array([d.state for d in _state_list])
+
+    def getRandomActions(
+        self, _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
+        pass
+
+    def getBestActions(
+        self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
+        pass
+
+    def getSoftActions(
+        self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
+    ) -> typing.Sequence[int]:
+        pass

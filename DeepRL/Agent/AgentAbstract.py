@@ -160,7 +160,8 @@ class AgentAbstract:
     def updateEpsilon(self):
         self.config.epsilon = max(
             self.config.epsilon_underline,
-            self.config.epsilon * self.config.epsilon_decay)
+            self.config.epsilon * self.config.epsilon_decay
+        )
 
     def func(self, _x_data: np.ndarray, _train: bool = True) -> np.ndarray:
         """

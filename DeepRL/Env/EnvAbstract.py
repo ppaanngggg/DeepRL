@@ -15,12 +15,15 @@ class EnvAbstract(object):
         reset and start a new game,
         !!! you have to create the init state !!!
         !!! you have to set in_game to True if finished !!!
+
         :return: none
         """
         raise NotImplementedError
 
     def getState(self) -> EnvState:
         """
+        dump the current env state and return
+
         :return: cur env state
         """
         raise NotImplementedError
