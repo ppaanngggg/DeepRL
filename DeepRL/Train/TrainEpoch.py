@@ -17,8 +17,8 @@ class TrainEpoch:
             _env: EnvAbstract,
             _epoch_max: int,
             _epoch_train: int,
-            _epoch_update_target: int,
-            _epoch_save: int,
+            _train_update_target: int,
+            _train_save: int,
             _save_path: str = './save',
             _use_cmd: bool = True,
     ):
@@ -28,10 +28,11 @@ class TrainEpoch:
         self.env = _env
 
         self.epoch = 0
+        self.train_time = 0
         self.epoch_max = _epoch_max
         self.epoch_train = _epoch_train
-        self.epoch_update_target = _epoch_update_target
-        self.epoch_save = _epoch_save
+        self.train_update_target = _train_update_target
+        self.train_save = _train_save
 
         self.total_reward_buf = []
 
@@ -44,30 +45,33 @@ class TrainEpoch:
         tmp_reward_buf = []
         while self.epoch < self.epoch_max:
             logger.info('Start new game: {}'.format(self.epoch))
+            # collect data
+            for _ in range(self.epoch_train):
+                self.agent.startNewGame()
+                self.epoch += 1
 
-            self.agent.startNewGame()
-            self.epoch += 1
+                # step until game finishes
+                while self.agent.step():
+                    pass
+                tmp_reward_buf.append(self.env.total_reward)
 
-            # step until game finishes
-            while self.agent.step():
-                pass
-            tmp_reward_buf.append(self.env.total_reward)
+                if self.use_cmd:  # cmd
+                    rlist, _, _ = select([sys.stdin], [], [], 0.0)
+                    if rlist:
+                        sys.stdin.readline()
+                        self.shell.cmdloop()
+                    else:
+                        pass
 
-            if not self.epoch % self.epoch_train:
-                self.agent.train()
-                self.total_reward_buf.append(tmp_reward_buf)
-                tmp_reward_buf = []
-            if not self.epoch % self.epoch_update_target:
+            # train model
+            self.agent.train()
+            self.train_time += 1
+            self.total_reward_buf.append(tmp_reward_buf)
+            tmp_reward_buf = []
+
+            if not self.train_time % self.train_update_target:
                 self.agent.updateTargetFunc()
-            if not self.epoch % self.epoch_save:
+            if not self.train_time % self.train_save:
                 self.agent.save(
                     self.epoch, 0, self.save_path
                 )
-
-            if self.use_cmd:  # cmd
-                rlist, _, _ = select([sys.stdin], [], [], 0.0)
-                if rlist:
-                    sys.stdin.readline()
-                    self.shell.cmdloop()
-                else:
-                    pass

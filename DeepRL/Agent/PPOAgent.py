@@ -18,11 +18,18 @@ logger.setLevel(logging.INFO)
 
 
 class PPOAgent(AgentAbstract):
+    """
+    PPO agent
+    _policy_model:
+    """
+
     def __init__(
             self,
             _policy_model: nn.Module,
             _value_model: nn.Module,
             _env: EnvAbstract,
+            _use_ou: bool = False,
+            _theta: typing.Union[float, np.ndarray] = 1.0,
             _gamma: float = 0.9,
             _tau: float = 0.95,
             _rate_clip: float = 0.2,
@@ -50,11 +57,16 @@ class PPOAgent(AgentAbstract):
         for p in self.target_p_func.parameters():
             p.requires_grad = False
         self.v_func: nn.Module = _value_model
-
+        # turn to gpu, if necessary
         if self.config.gpu:
             self.p_func.cuda()
             self.target_p_func.cuda()
             self.v_func.cuda()
+
+        # ou explore rate
+        self.use_ou = _use_ou
+        self.theta = _theta
+        self.current_x: np.ndarray = None
 
         self.replay = _replay
 
@@ -63,26 +75,44 @@ class PPOAgent(AgentAbstract):
         self.policy_optim = _policy_optimizer
         self.value_optim = _value_optimizer
 
+    def _action_random(self, _action: np.ndarray, _std) -> np.ndarray:
+        if self.current_x is None:
+            self.current_x = np.zeros_like(_action)
+        diff_x = self.theta * -self.current_x
+        diff_x = diff_x + _std * \
+                 np.random.normal(size=self.current_x.shape)
+        self.current_x = self.current_x + diff_x
+        tmp_action = _action + self.current_x
+        return tmp_action
+
     def chooseAction(self, _state: EnvState) -> np.ndarray:
         x_data = self.env.getInputs([_state])
         x_var = self.np2var(x_data, True)
 
         self.p_func.eval()
         action_mean, action_log_std = self.p_func(x_var)
-        action_mean = action_mean.data
-        action_log_std = action_log_std.data
-
+        action_mean = action_mean.data.numpy()[0]
+        action_std = np.exp(action_log_std.data.numpy())
+        if self.epoch % self.config.epoch_show_log == 0:
+            logger.info('Env: {}; Mean: {}; Std: {}'.format(
+                x_data, action_mean, action_std
+            ))
         if self.config.is_train:
-            action_std = action_log_std.exp().expand_as(action_mean)
-            random_action = torch.normal(action_mean, action_std)
-            random_action.clamp_(
-                -self.config.action_clip, self.config.action_clip
+            if self.use_ou:
+                random_action = self._action_random(
+                    action_mean, action_std
+                )
+            else:
+                random_action = np.random.normal(
+                    action_mean, action_std
+                )
+            return np.clip(
+                random_action,
+                -self.config.action_clip,
+                self.config.action_clip,
             )
-            if self.config.gpu:
-                random_action = random_action.cpu()
-            return random_action.numpy()[0]
         else:
-            return action_mean.numpy()[0]
+            return action_mean
 
     def np2var(self, _np_arr: np.ndarray, _volatile: bool = False) -> Variable:
         tmp = torch.from_numpy(_np_arr)
@@ -137,10 +167,11 @@ class PPOAgent(AgentAbstract):
 
         rate = torch.exp(new_log_prob - old_log_prob)  # real prob rate
         rate_clip = torch.clamp(
-            rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip)
-        final_rate = torch.min(rate, rate_clip)
-        loss = -torch.mean(final_rate * adv_var) - \
-            self.config.beta_entropy * entropy.mean()
+            rate, 1 - self.config.rate_clip, 1 + self.config.rate_clip
+        )
+        loss_clip = torch.min(rate * adv_var, rate_clip * adv_var)
+        loss = -torch.mean(loss_clip) - \
+               self.config.beta_entropy * entropy.mean()
 
         loss.backward()
 
@@ -171,11 +202,11 @@ class PPOAgent(AgentAbstract):
             batch_tuple = _batch_tuples.pop()
             if batch_tuple.next_state.in_game:  # if game still continues
                 return_arr[i] = batch_tuple.reward + \
-                    self.config.gamma * prev_return
+                                self.config.gamma * prev_return
                 delta = batch_tuple.reward + \
-                    self.config.gamma * prev_value - value_arr[i]
+                        self.config.gamma * prev_value - value_arr[i]
                 adv_arr[i] = delta + self.config.gamma * \
-                    self.config.tau * prev_advantage
+                             self.config.tau * prev_advantage
             else:  # if game ends
                 return_arr[i] = batch_tuple.reward
                 delta = batch_tuple.reward - value_arr[i]
@@ -199,7 +230,7 @@ class PPOAgent(AgentAbstract):
             raise Exception('_batch_tuples and _dataset are both None')
 
         status_arr = torch.from_numpy(status_arr)
-        action_arr = torch.from_numpy(action_arr)
+        action_arr = torch.from_numpy(action_arr).float()
         return_arr = torch.from_numpy(return_arr)
         adv_arr = torch.from_numpy(adv_arr)
         if self.config.gpu:

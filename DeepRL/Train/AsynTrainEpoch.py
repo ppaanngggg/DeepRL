@@ -4,7 +4,6 @@ from select import select
 
 import numpy as np
 import torch.multiprocessing as mp
-
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 from DeepRL.Env import EnvAbstract
 from DeepRL.Train.TrainShell import TrainShell
@@ -51,6 +50,7 @@ class AsynTrainEpoch:
 
         # training control
         self.epoch = 0
+        self.train_times = 0
         self.epoch_max = _epoch_max
         self.epoch_train = _epoch_train
         self.train_update_target = _train_update_target
@@ -90,7 +90,6 @@ class AsynTrainEpoch:
         return dataset, [d[1] for d in _ret_list]
 
     def run(self):
-        self.train_times = 0
         while self.epoch < self.epoch_max:
             # multiprocessing to get dataset
             ret_list = self.pool.starmap(

@@ -9,7 +9,7 @@ from torch.autograd import Variable
 from DeepRL.Agent import DDPGAgent
 from DeepRL.Replay import NaiveReplay
 from DeepRL.Train import Train
-from envs.pendulum_env import DemoEnv
+from envs import PendulumEnv
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
     actor = ActorModel()
     critic = CriticModel()
-    env = DemoEnv()
+    env = PendulumEnv()
 
     agent = DDPGAgent(
         _actor_model=actor,

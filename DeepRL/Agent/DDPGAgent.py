@@ -51,7 +51,7 @@ class DDPGAgent(AgentAbstract):
             self.q_func.cuda()
             self.target_q_func.cuda()
 
-        # explore rate
+        # ou explore rate
         self.theta = _theta
         self.sigma = _sigma
         self.current_x: np.ndarray = None
@@ -83,7 +83,8 @@ class DDPGAgent(AgentAbstract):
             return np.clip(
                 self._action_random(a),
                 -self.config.action_clip,
-                self.config.action_clip, )
+                self.config.action_clip,
+            )
         else:
             return a
 
