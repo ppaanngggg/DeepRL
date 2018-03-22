@@ -1,15 +1,14 @@
-import typing
 from copy import deepcopy
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
-
+import typing
 from DeepRL.Agent.AgentAbstract import AgentAbstract
 from DeepRL.Env import EnvAbstract, EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
+from torch.autograd import Variable
 
 
 class DDPGAgent(AgentAbstract):
@@ -27,7 +26,8 @@ class DDPGAgent(AgentAbstract):
             _actor_optimizer: optim.Optimizer=None,
             _critic_optimizer: optim.Optimizer=None,
             _action_clip: float=1.0,
-            _gpu: bool=False, ):
+            _gpu: bool=False
+    ):
         super().__init__(_env)
 
         # set config
@@ -37,9 +37,9 @@ class DDPGAgent(AgentAbstract):
         self.config.gpu = _gpu
 
         self.p_func: nn.Module = _actor_model
-        # self.target_p_func: nn.Module = deepcopy(self.p_func)
-        # for p in self.target_p_func.parameters():
-        #     p.requires_grad = False
+        self.target_p_func: nn.Module = deepcopy(self.p_func)
+        for p in self.target_p_func.parameters():
+            p.requires_grad = False
         self.q_func: nn.Module = _critic_model
         self.target_q_func: nn.Module = deepcopy(self.q_func)
         for p in self.target_q_func.parameters():
@@ -47,7 +47,7 @@ class DDPGAgent(AgentAbstract):
         # turn to gpu, if necessary
         if self.config.gpu:
             self.p_func.cuda()
-            # self.target_p_func.cuda()
+            self.target_p_func.cuda()
             self.q_func.cuda()
             self.target_q_func.cuda()
 
@@ -112,14 +112,15 @@ class DDPGAgent(AgentAbstract):
         prev_action = Variable(prev_action)
 
         # calc target value estimate and loss
-        # next_action = self.target_p_func(next_x) # choose action by stable model
-        next_action = self.p_func(next_x)  # choose action by latest model
+        next_action = self.target_p_func(
+            next_x)  # choose action by stable model
         next_output = self.target_q_func(
             next_x, next_action).data  # get next value by stable model
         if self.config.gpu:
             next_output = next_output.cpu()
-        target_value = self.getQTargetData(next_output.numpy(), next_action,
-                                           _batch_tuples)
+        target_value = self.getQTargetData(
+            next_output.numpy(), next_action, _batch_tuples
+        )
         target_value = torch.from_numpy(target_value).float()
         if self.config.gpu:
             target_value = target_value.cuda()
@@ -150,12 +151,12 @@ class DDPGAgent(AgentAbstract):
         return reward_arr + self.config.gamma * _next_output
 
     def updateTargetFunc(self):
-        # for tp, p in zip(
-        #         self.target_p_func.parameters(),
-        #         self.p_func.parameters(),
-        # ):
-        #     tp.data = (1 - self.update_rate) * \
-        #         tp.data + self.update_rate * p.data
+        for tp, p in zip(
+                self.target_p_func.parameters(),
+                self.p_func.parameters(),
+        ):
+            tp.data = (1 - self.update_rate) * \
+                tp.data + self.update_rate * p.data
         for tp, p in zip(
                 self.target_q_func.parameters(),
                 self.q_func.parameters(), ):
