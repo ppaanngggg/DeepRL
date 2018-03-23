@@ -80,7 +80,7 @@ class PPOAgent(AgentAbstract):
             self.current_x = np.zeros_like(_action)
         diff_x = self.theta * -self.current_x
         diff_x = diff_x + _std * \
-                 np.random.normal(size=self.current_x.shape)
+            np.random.normal(size=self.current_x.shape)
         self.current_x = self.current_x + diff_x
         tmp_action = _action + self.current_x
         return tmp_action
@@ -171,7 +171,7 @@ class PPOAgent(AgentAbstract):
         )
         loss_clip = torch.min(rate * adv_var, rate_clip * adv_var)
         loss = -torch.mean(loss_clip) - \
-               self.config.beta_entropy * entropy.mean()
+            self.config.beta_entropy * entropy.mean()
 
         loss.backward()
 
@@ -202,11 +202,11 @@ class PPOAgent(AgentAbstract):
             batch_tuple = _batch_tuples.pop()
             if batch_tuple.next_state.in_game:  # if game still continues
                 return_arr[i] = batch_tuple.reward + \
-                                self.config.gamma * prev_return
+                    self.config.gamma * prev_return
                 delta = batch_tuple.reward + \
-                        self.config.gamma * prev_value - value_arr[i]
+                    self.config.gamma * prev_value - value_arr[i]
                 adv_arr[i] = delta + self.config.gamma * \
-                             self.config.tau * prev_advantage
+                    self.config.tau * prev_advantage
             else:  # if game ends
                 return_arr[i] = batch_tuple.reward
                 delta = batch_tuple.reward - value_arr[i]
