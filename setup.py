@@ -7,6 +7,8 @@ setup(
     packages=[
         'DeepRL',
         'DeepRL/Agent',
+        'DeepRL/Env',
+        'DeepRL/Env/gym_wrapper',
         'DeepRL/Replay',
         'DeepRL/Train',
     ],

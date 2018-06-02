@@ -1,5 +1,4 @@
 import logging
-import random
 import typing
 
 import numpy as np
@@ -11,6 +10,8 @@ from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+ACTION_TYPE = typing.Union[int, np.ndarray]
 
 
 class Config(object):
@@ -76,13 +77,11 @@ class AgentAbstract:
 
         # alloc env
         self.env = _env
-
         # set config, and set device
         self.config = Config()
-
         # init epoch
         self.epoch = 0
-
+        # replay for training
         self.replay: ReplayAbstract = None
 
     def training(self):
@@ -109,8 +108,7 @@ class AgentAbstract:
         """
         agent will get cur state and choose one action and execute
 
-        Returns:
-            still in game or not
+        :return: True or False, it means whether in game
         """
 
         # get current state
@@ -120,7 +118,8 @@ class AgentAbstract:
         # do action and get reward
         reward = self.env.doAction(action)
 
-        if self.epoch % self.config.epoch_show_log == 0:
+        if self.epoch % self.config.epoch_show_log == 0 or \
+                not self.config.is_train:
             logger.info('Action: {}; Reward: {}'.format(action, reward))
 
         if self.config.is_train:
@@ -131,45 +130,12 @@ class AgentAbstract:
 
         return self.env.in_game
 
-    def chooseAction(self, _state: EnvState) -> typing.Union[int, np.ndarray]:
+    def chooseAction(self, _state: EnvState) -> ACTION_TYPE:
         """
-        choose action by special model in special state,
-        suitable for most agent
-        """
-        if self.config.is_train:
-            # update epsilon
-            self.updateEpsilon()
-            random_value = random.random()
-            if random_value < self.config.epsilon:
-                # randomly choose
-                return self.env.getRandomActions([_state])[0]
-            else:
-                # use model to choose
-                x_data = self.env.getInputs([_state])
-                output = self.func(x_data, False)
+        get action by special model in special state,
 
-                if self.epoch % self.config.epoch_show_log == 0:
-                    logger.info(str(output))
-                return self.env.getBestActions(output, [_state])[0]
-        else:
-            x_data = self.env.getInputs([_state])
-            output = self.func(x_data, False)
-            logger.info(output)
-            return self.env.getBestActions(output, [_state])[0]
-
-    def updateEpsilon(self):
-        self.config.epsilon = max(
-            self.config.epsilon_underline,
-            self.config.epsilon * self.config.epsilon_decay
-        )
-
-    def func(self, _x_data: np.ndarray, _train: bool = True) -> np.ndarray:
-        """
-        get the output of model
-
-        :param _x_data: input
-        :param _train: this output is for training or not
-        :return: output of model
+        :param _state: EnvState
+        :return: int or np.ndarray
         """
         raise NotImplementedError
 
@@ -208,32 +174,8 @@ class AgentAbstract:
         """
         return self.env.getInputs([t.next_state for t in _batch_tuples])
 
-    def getDataset(self, _batch_tuples: typing.List[ReplayTuple]):
+    def getDataset(self, _batch_tuples: typing.Sequence[ReplayTuple]):
         raise NotImplementedError
-
-    def getActionData(
-            self,
-            _shape: typing.Tuple[int],
-            _actions: typing.Sequence[int], ) -> np.ndarray:
-        action_data = np.zeros(_shape, dtype=np.float32)
-        for i in range(len(_actions)):
-            action_data[i, _actions[i]] = 1.
-        return action_data
-
-    def getQTargetData(
-            self,
-            _next_output: np.ndarray,
-            _next_action: typing.Sequence[int],
-            _batch_tuples: typing.Sequence[ReplayTuple]) -> np.ndarray:
-        target_data = np.zeros(len(_batch_tuples), np.float32)
-        for i in range(len(_batch_tuples)):
-            target_value = _batch_tuples[i].reward
-            # if not terminal state
-            if _batch_tuples[i].next_state.in_game:
-                target_value += \
-                    self.config.gamma * _next_output[i][_next_action[i]]
-            target_data[i] = target_value
-        return target_data
 
     @staticmethod
     def _update_target_func(_target_func: nn.Module, _func: nn.Module):
@@ -245,7 +187,7 @@ class AgentAbstract:
         """
         update target funcs if exist
         """
-        logger.info('update target func')
+        logger.info('Update Target Func')
         AgentAbstract._update_target_func(self.target_v_func, self.v_func)
         AgentAbstract._update_target_func(self.target_q_func, self.q_func)
         AgentAbstract._update_target_func(self.target_p_func, self.p_func)

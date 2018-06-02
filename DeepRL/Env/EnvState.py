@@ -18,10 +18,9 @@ class EnvState(object):
 
     def __repr__(self) -> str:
         tmp = \
-            "##### State #####\n" \
-            "## in_game: {}\n" \
-            "## states: {}\n" \
-            "#################"
+            "## EnvState ##\n" \
+            "  in_game: {}\n" \
+            "  states: {}"
         return tmp.format(
             self.in_game, self.state,
         )

@@ -1,20 +1,20 @@
+import random
 import typing
 from copy import deepcopy
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
 
-from DeepRL.Agent.AgentAbstract import AgentAbstract
-from DeepRL.Env import EnvAbstract
+from DeepRL.Agent.AgentAbstract import AgentAbstract, ACTION_TYPE
+from DeepRL.Env import EnvAbstract, EnvState
 from DeepRL.Replay.ReplayAbstract import ReplayAbstract, ReplayTuple
 
 
 class DoubleDQNAgent(AgentAbstract):
     def __init__(
-            self, _model: nn.Module,
+            self,
+            _model: nn.Module,
             _env: EnvAbstract,
             _gamma: float, _batch_size: int,
             _epsilon_init: float,
@@ -28,8 +28,8 @@ class DoubleDQNAgent(AgentAbstract):
 
         self.q_func: nn.Module = _model
         self.target_q_func: nn.Module = deepcopy(_model)
-        for p in self.target_q_func.parameters():
-            p.requires_grad = False
+        for param in self.target_q_func.parameters():
+            param.requires_grad_(False)
 
         # set config
         self.config.gamma = _gamma
@@ -45,48 +45,63 @@ class DoubleDQNAgent(AgentAbstract):
         self.criterion = nn.MSELoss()
         self.optimizer = _optimizer
 
-    def func(
-            self, _x_data: np.ndarray, _train: bool = True
-    ) -> np.ndarray:
-        x_var = Variable(
-            torch.from_numpy(_x_data).float(),
-            volatile=not _train
+    def updateEpsilon(self):
+        self.config.epsilon = max(
+            self.config.epsilon_underline,
+            self.config.epsilon * self.config.epsilon_decay
         )
-        return self.q_func(x_var).data.numpy()
 
-    def doTrain(self, _batch_tuples: typing.Sequence[ReplayTuple]):
+    def chooseAction(self, _state: EnvState) -> ACTION_TYPE:
+        if self.config.is_train:
+            # update epsilon
+            self.updateEpsilon()
+            random_value = random.random()
+            if random_value < self.config.epsilon:
+                # randomly choose
+                return self.env.getRandomActions([_state])[0]
+
+        # if eval or not use random action, use model to choose
+        x = torch.Tensor(self.env.getInputs([_state]))
+        with torch.no_grad():
+            output = self.q_func(x).numpy()
+
+        return self.env.getBestActions(output, [_state])[0]
+
+    def doTrain(
+            self, _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
+            _dataset=None
+    ):
         # get inputs from batch
-        prev_x = self.getPrevInputs(_batch_tuples)
-        next_x = self.getNextInputs(_batch_tuples)
-        prev_x = Variable(torch.from_numpy(prev_x).float())
-        next_x = Variable(
-            torch.from_numpy(next_x).float(),
-            volatile=True
-        )
+        prev_x = torch.Tensor(self.getPrevInputs(_batch_tuples))
+        next_x = torch.Tensor(self.getNextInputs(_batch_tuples))
 
-        # calc current value estimate
+        # calc value estimate according to prev envs and prev actions
         prev_output = self.q_func(prev_x)
-        prev_action = self.getActionData(
-            prev_output.size(), [d.action for d in _batch_tuples]
-        )
-        prev_output = prev_output * Variable(torch.from_numpy(prev_action))
-        prev_output = prev_output.sum(1)
+        prev_action = [d.action for d in _batch_tuples]
+        prev_value = prev_output[range(len(prev_action)), prev_action]
 
         # calc target value estimate and loss
-        next_output = self.q_func(next_x)
+        with torch.no_grad():
+            next_output = self.q_func(next_x)
         next_action = self.env.getBestActions(
-            next_output.data.numpy(),
+            next_output.numpy(),
             [t.next_state for t in _batch_tuples]
         )
-        next_output = self.target_q_func(next_x)
-        target_data = self.getQTargetData(
-            next_output.data.numpy(), next_action, _batch_tuples
-        )
+        # use target to re-estimate next value
+        with torch.no_grad():
+            next_output = self.target_q_func(next_x)
+        next_value = next_output[range(len(next_action)), next_action]
+
+        target_value = torch.Tensor([d.reward for d in _batch_tuples])
+        target_value.add_(torch.Tensor([  # add gamma * next_value if game not ends
+            d.next_state.in_game for d in _batch_tuples
+        ]) * self.config.gamma * next_value)
+
         loss = self.criterion(
-            prev_output, Variable(torch.from_numpy(target_data))
+            prev_value, target_value
         )
 
         # update q func
         self.optimizer.zero_grad()
         loss.backward()
-        self.optimizer.step()
+        self.optimizer.step(None)

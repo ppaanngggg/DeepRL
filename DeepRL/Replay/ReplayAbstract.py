@@ -18,12 +18,11 @@ class ReplayTuple:
 
     def __repr__(self) -> str:
         tmp = \
-            "\n----- begin -----\n" \
-            "-- state: \n{}\n" \
-            "-- action: {}\n" \
-            "-- reward: {}\n" \
-            "-- next_state: \n{}\n" \
-            "----- end -----\n"
+            "## ReplayTuple ##\n" \
+            "  state: {}\n" \
+            "  action: {}\n" \
+            "  reward: {}\n" \
+            "  next_state: {}"
         return tmp.format(
             self.state, self.action, self.reward, self.next_state
         )
@@ -37,7 +36,7 @@ class ReplayAbstract:
     ):
         raise NotImplementedError()
 
-    def pull(self, _num: int=None) -> typing.Sequence[ReplayTuple]:
+    def pull(self, _num: int = None) -> typing.Sequence[ReplayTuple]:
         raise NotImplementedError()
 
     def merge(self):

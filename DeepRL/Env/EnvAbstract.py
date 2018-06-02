@@ -60,26 +60,26 @@ class EnvAbstract(object):
         raise NotImplementedError
 
     def getBestActions(
-            self, _data: np.ndarray,
+            self, _actions: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         """
         return best actions according to model's output and states
 
-        :param _data:
+        :param _actions:
         :param _state_list:
         :return:
         """
         raise NotImplementedError
 
     def getSoftActions(
-            self, _data: np.ndarray,
+            self, _actions: np.ndarray,
             _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         """
         return soft actions according to model's output and states
 
-        :param _data:
+        :param _actions:
         :param _state_list:
         :return:
         """

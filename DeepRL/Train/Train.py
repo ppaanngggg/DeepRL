@@ -33,16 +33,16 @@ class Train:
         self.agent: AgentAbstract = _agent
         self.agent.training()  # set to training mode
 
-        self.epoch = 0
-        self.step_local = 0
-        self.step_total = 0
-
         self.epoch_max = _epoch_max
 
         self.step_init = _step_init
         self.step_train = _step_train
         self.step_update_target = _step_update_target
         self.step_save = _step_save
+
+        self.epoch = 0  # the games has been taken
+        self.step_local = 0  # the steps has been taken in current game
+        self.step_total = 0  # the total steps has been taken
 
         self.save_path = _save_path
         self.use_cmd = _use_cmd

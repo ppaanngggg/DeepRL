@@ -1,2 +1,3 @@
 from .mountain_car_continous_env import MountainCarContinuousEnv
 from .pendulum_env import PendulumEnv
+from .cartpole_env import CartPoleEnv
