@@ -154,7 +154,8 @@ class AgentAbstract:
             self.doTrain(None, _dataset)
 
     def doTrain(
-            self, _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
+            self,
+            _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
             _dataset=None
     ):
         """

@@ -21,5 +21,5 @@ class TrainShell(cmd.Cmd):
             pass
         self.trainer.agent.training()
 
-    def do_bye(self, _arg):
+    def do_quit(self, _arg):
         return True

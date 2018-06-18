@@ -5,10 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from envs import MountainCarContinuousEnv
 from torch.autograd import Variable
 
 from DeepRL.Agent import PPOAgent
+from DeepRL.Env.gym_wrapper import MountainCarContinuousEnv
 from DeepRL.Replay import TmpReplay
 from DeepRL.Train import AsynTrainEpoch, TrainEpoch
 

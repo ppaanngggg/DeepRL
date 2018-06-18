@@ -68,7 +68,8 @@ class DoubleDQNAgent(AgentAbstract):
         return self.env.getBestActions(output, [_state])[0]
 
     def doTrain(
-            self, _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
+            self,
+            _batch_tuples: typing.Union[None, typing.Sequence[ReplayTuple]],
             _dataset=None
     ):
         # get inputs from batch
@@ -93,9 +94,10 @@ class DoubleDQNAgent(AgentAbstract):
         next_value = next_output[range(len(next_action)), next_action]
 
         target_value = torch.Tensor([d.reward for d in _batch_tuples])
-        target_value.add_(torch.Tensor([  # add gamma * next_value if game not ends
-            d.next_state.in_game for d in _batch_tuples
-        ]) * self.config.gamma * next_value)
+        target_value.add_(
+            torch.Tensor([  # add gamma * next_value if game not ends
+                d.next_state.in_game for d in _batch_tuples
+            ]) * self.config.gamma * next_value)
 
         loss = self.criterion(
             prev_value, target_value

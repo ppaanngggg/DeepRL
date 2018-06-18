@@ -1,12 +1,12 @@
 import logging
+import typing
 
 import gym
 import numpy as np
-import typing
+
 from DeepRL.Env import EnvAbstract, EnvState
 
 logging.basicConfig(level=logging.INFO)
-
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -40,22 +40,24 @@ class PendulumEnv(EnvAbstract):
         self.total_reward += reward
         if self.render:
             self.g.render()
-        return reward / 10.
+
+        reward = max(reward / 10, -1)  # clip reward
+        return reward
 
     def getInputs(self, _state_list: typing.Sequence[EnvState]) -> np.ndarray:
         return np.array([d.state for d in _state_list])
 
     def getRandomActions(
-        self, _state_list: typing.Sequence[EnvState]
+            self, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         pass
 
     def getBestActions(
-        self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
+            self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         pass
 
     def getSoftActions(
-        self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
+            self, _data: np.ndarray, _state_list: typing.Sequence[EnvState]
     ) -> typing.Sequence[int]:
         pass

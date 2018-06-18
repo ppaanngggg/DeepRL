@@ -4,12 +4,11 @@ import logging
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 
 from DeepRL.Agent import DDPGAgent
+from DeepRL.Env.gym_wrapper import PendulumEnv
 from DeepRL.Replay import NaiveReplay
 from DeepRL.Train import Train
-from envs import PendulumEnv
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -19,11 +18,11 @@ class ActorModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.fc1 = nn.Linear(3, 30)
-        self.fc2 = nn.Linear(30, 1)
+        self.fc1 = nn.Linear(3, 16)
+        self.fc2 = nn.Linear(16, 1)
 
-    def forward(self, x: Variable):
-        hidden = F.relu(self.fc1(x))
+    def forward(self, x):
+        hidden = F.tanh(self.fc1(x))
         return F.tanh(self.fc2(hidden)) * 2.0
 
 
@@ -31,12 +30,12 @@ class CriticModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.fc_s = nn.Linear(3, 30)
-        self.fc_a = nn.Linear(1, 30)
-        self.fc_o = nn.Linear(30, 1)
+        self.fc_s = nn.Linear(3, 16)
+        self.fc_a = nn.Linear(1, 16)
+        self.fc_o = nn.Linear(16, 1)
 
-    def forward(self, s: Variable, a: Variable):
-        return self.fc_o(F.relu(self.fc_s(s) + self.fc_a(a)))
+    def forward(self, s, a):
+        return self.fc_o(F.tanh(self.fc_s(s) + self.fc_a(a)))
 
 
 if __name__ == '__main__':
